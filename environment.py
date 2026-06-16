@@ -32,26 +32,36 @@ class Environment:
     def get_cost_transitions(grid, state, house_pos):
         r, c = state
         transitions = []
-        for action, (dr, dc) in zip(["Up", "Down", "Left", "Right"], [(-1,0), (1,0), (0,-1), (0,1)]):
+        for action, (dr, dc) in zip(["Up", "Down", "Left", "Right"], [(-1,0),(1,0),(0,-1),(0,1)]):
             nr, nc = r+dr, c+dc
-            if 0<=nr<GameConfig.GRID and 0<=nc<GameConfig.GRID and grid[nr][nc] != GameConfig.MOUNT:
+            if 0 <= nr < GameConfig.GRID and 0 <= nc < GameConfig.GRID and grid[nr][nc] != GameConfig.MOUNT:
                 if not Environment.ALLOW_HOLES and grid[nr][nc] == GameConfig.HOLE:
                     continue
+                # Cost hợp lý: mặc định 1, hố tốn thêm 5 (tránh hố nếu có thể)
+                # KHÔNG dùng cost âm để tránh vòng lặp vô hạn trong UCS/A*
                 cost = 1
-                if grid[nr][nc] == GameConfig.HOLE: cost += 3
-                if (nr, nc) == house_pos: cost -= 20
+                if grid[nr][nc] == GameConfig.HOLE:
+                    cost = 6
                 transitions.append(((nr, nc), cost, action))
         return transitions
 
     @staticmethod
     def heuristic(state, house_pos):
+        """
+        Manhattan distance — admissible heuristic cho A* và IDA*.
+        KHÔNG trừ giá trị âm để đảm bảo tính admissible (h <= h*).
+        """
         r, c = state
-        dist = abs(r - house_pos[0]) + abs(c - house_pos[1])
-        return dist - 20
+        return abs(r - house_pos[0]) + abs(c - house_pos[1])
 
     @staticmethod
     def get_initial_belief(grid):
-        return frozenset((r, c) for r in range(GameConfig.GRID) for c in range(GameConfig.GRID) if grid[r][c] != GameConfig.MOUNT)
+        return frozenset(
+            (r, c)
+            for r in range(GameConfig.GRID)
+            for c in range(GameConfig.GRID)
+            if grid[r][c] != GameConfig.MOUNT
+        )
 
     @staticmethod
     def sensorless_transition(grid, b_state, action):
@@ -60,7 +70,8 @@ class Environment:
         new_b = set()
         for r, c in b_state:
             if grid[r][c] == GameConfig.HOLE:
-                for adr, adc in [(-1,0), (1,0), (0,-1), (0,1)]:
+                # Trên hố: trượt ngẫu nhiên sang 4 hướng
+                for adr, adc in [(-1,0),(1,0),(0,-1),(0,1)]:
                     nr, nc = r + adr, c + adc
                     if 0 <= nr < GameConfig.GRID and 0 <= nc < GameConfig.GRID and grid[nr][nc] != GameConfig.MOUNT:
                         if not Environment.ALLOW_HOLES and grid[nr][nc] == GameConfig.HOLE:
