@@ -66,16 +66,18 @@ class FrozenLakeGame:
         last_assignment = {}
         for a in gen:
             last_assignment = a
-            # Dừng sớm khi đã có đủ 18 biến
-            if len(last_assignment) == 18:
+            # Dừng sớm khi assignment hoàn chỉnh
+            if CSPGenerator._assignment_complete(last_assignment):
                 break
-        if self._apply_assignment(last_assignment):
+        # Chuyển từ {(r,c): tile_type} sang {index: flat_pos} cho _apply_assignment
+        formatted = CSPGenerator._to_game_format(last_assignment)
+        if self._apply_assignment(formatted):
             self.log = [f"[MAP] Map mới tạo xong! ({GameConfig.GRID}x{GameConfig.GRID})"]
         else:
             self.log = ["[ERR] Tạo map thất bại, thử lại!"]
         self._reset_run()
 
-    def _apply_assignment(self, res):
+    def _apply_assignment(self, res, relocate_santa=True):
         if not res or len(res) < 18:
             return False
         items = ["Santa", "House"] + ["Hole"] * 10 + ["Mount"] * 6
@@ -93,6 +95,20 @@ class FrozenLakeGame:
                 grid[r][c] = GameConfig.HOLE
             elif items[i] == "Mount":
                 grid[r][c] = GameConfig.MOUNT
+
+        # Khi KHÔNG phải CSP (relocate_santa=True):
+        # nếu Santa trùng nhà, chọn ô SNOW ngẫu nhiên khác
+        if relocate_santa and (s_pos == h_pos or s_pos is None):
+            snow_cells = [
+                (r2, c2)
+                for r2 in range(GameConfig.GRID)
+                for c2 in range(GameConfig.GRID)
+                if grid[r2][c2] == GameConfig.SNOW and (r2, c2) != h_pos
+            ]
+            if snow_cells:
+                s_pos = random.choice(snow_cells)
+            else:
+                return False
 
         self.grid, self.santa_start, self.house_pos = grid, s_pos, h_pos
         return True
@@ -347,7 +363,8 @@ class FrozenLakeGame:
             try:
                 self.csp_assignment = next(self.csp_generator)
             except StopIteration:
-                if self._apply_assignment(self.csp_assignment):
+                formatted = CSPGenerator._to_game_format(self.csp_assignment)
+                if self._apply_assignment(formatted, relocate_santa=False):
                     self.log.append("[OK] CSP Map Generated successfully.")
                 else:
                     self.log.append("[ERR] CSP Map Gen Failed!")
@@ -503,18 +520,34 @@ class FrozenLakeGame:
         pygame.display.flip()
 
     def _draw_csp(self):
-        items = ["Santa", "House"] + ["Hole"] * 10 + ["Mount"] * 6
-        for i, val in self.csp_assignment.items():
-            r, c = val // GameConfig.GRID, val % GameConfig.GRID
-            x, y = c * GameConfig.CELL, r * GameConfig.CELL
-            if items[i] == "Santa":
-                draw_santa(self.screen, x, y)
-            elif items[i] == "House":
-                draw_house_tile(self.screen, x, y)
-            elif items[i] == "Hole":
-                draw_hole_tile(self.screen, x, y)
-            elif items[i] == "Mount":
-                draw_mount_tile(self.screen, x, y)
+        items_label = ["Santa", "House"] + ["Hole"] * 10 + ["Mount"] * 6
+        for key, val in self.csp_assignment.items():
+            # val có thể là flat int (index-based) hoặc tile type (cell-based)
+            if isinstance(key, tuple):
+                # key = (r, c), val = tile type (FROZEN/HOLE/MOUNT/SANTA_HOUSE)
+                r, c = key
+                x, y = c * GameConfig.CELL, r * GameConfig.CELL
+                from algorithms.csp import SANTA_HOUSE, HOLE, MOUNT
+                if val == SANTA_HOUSE:
+                    draw_santa(self.screen, x, y)
+                    draw_house_tile(self.screen, x, y)
+                elif val == HOLE:
+                    draw_hole_tile(self.screen, x, y)
+                elif val == MOUNT:
+                    draw_mount_tile(self.screen, x, y)
+            else:
+                # key = integer index, val = flat position
+                r, c = val // GameConfig.GRID, val % GameConfig.GRID
+                x, y = c * GameConfig.CELL, r * GameConfig.CELL
+                label = items_label[key] if key < len(items_label) else ""
+                if label == "Santa":
+                    draw_santa(self.screen, x, y)
+                elif label == "House":
+                    draw_house_tile(self.screen, x, y)
+                elif label == "Hole":
+                    draw_hole_tile(self.screen, x, y)
+                elif label == "Mount":
+                    draw_mount_tile(self.screen, x, y)
 
     def _draw_paths(self):
         if not self.full_path:
@@ -716,7 +749,7 @@ class FrozenLakeGame:
                     px_panel = GameConfig.GRID * GameConfig.CELL
                     if mouse[0] >= px_panel:   # chuot o trong panel
                         # e.y > 0 = lan len (xem cu hon), < 0 = lan xuong (xem moi hon)
-                        self.log_scroll = max(0, self.log_scroll - e.y * 2)
+                        self.log_scroll = max(0, self.log_scroll + e.y * 2)
 
             if self.state in [GameState.RUNNING, GameState.CSP_GEN]:
                 self.anim_timer += dt
