@@ -17,7 +17,7 @@ class GameState(Enum):
 class FrozenLakeGame:
     def __init__(self):
         self.screen = pygame.display.set_mode((GameConfig.W, GameConfig.H))
-        pygame.display.set_caption("❄️ Frozen Lake AI – 6 Algorithm Groups")
+        pygame.display.set_caption("Frozen Lake AI – 6 Algorithm Groups")
         self.clock = pygame.time.Clock()
 
         self.grid = self.santa_start = self.house_pos = None
@@ -87,7 +87,7 @@ class FrozenLakeGame:
             
         self.btns_alg = {}
         self._update_alg_buttons()
-        self.btn_run = Button((px, 200, 345, 36), "▶ Run Algorithm")
+        self.btn_run = Button((px, 200, 345, 36), "Run Algorithm")
 
     def _update_alg_buttons(self):
         px = GameConfig.GRID*GameConfig.CELL + 12
@@ -110,7 +110,7 @@ class FrozenLakeGame:
         self.anim_idx = self.anim_timer = 0
         self.csp_generator = None
         if "Map" not in self.log[-1] if self.log else True:
-            self.log = ["Press ▶ Run to start."]
+            self.log = ["Press Run to start."]
 
     def _get_alg_result(self, alg_fn, initial_state):
         Environment.ALLOW_HOLES = False
@@ -256,7 +256,7 @@ class FrozenLakeGame:
                 return
             
             if actual_next != next_planned:
-                self.log.append("💧 Lệch hướng! Tính toán lại...")
+                self.log.append("Lệch hướng! Tính toán lại...")
                 alg_fn = ALGORITHMS[self.group][self.alg_name]
                 
                 if self.group == 3:
@@ -286,14 +286,14 @@ class FrozenLakeGame:
         tile = self.grid[pos[0]][pos[1]]
         
         if tile == GameConfig.HOLE:
-            self.log.append(f"💧 Rớt hố!")
+            self.log.append(f"Rớt hố!")
 
         if pos == self.house_pos and (self.group == 5 or self.anim_idx == len(self.full_path)-1):
             self._finish_game()
 
     def _finish_game(self):
         self.state = GameState.DONE
-        self.log.append(f"🏠 Home! (Hoàn thành)")
+        self.log.append(f"Home! (Hoàn thành)")
 
     def draw(self):
         self.screen.fill(GameConfig.C["bg"])
