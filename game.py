@@ -20,11 +20,7 @@ class GameState(Enum):
 class FrozenLakeGame:
     def __init__(self):
         self.screen = pygame.display.set_mode((GameConfig.W, GameConfig.H))
-<<<<<<< HEAD
         pygame.display.set_caption("Frozen Lake AI - 6 Algorithm Groups")
-=======
-        pygame.display.set_caption("Frozen Lake AI – 6 Algorithm Groups")
->>>>>>> a0b2390f0519c0587c62795240cea45b7a4c5e1f
         self.clock = pygame.time.Clock()
 
         self.grid = self.santa_start = self.house_pos = None
@@ -129,13 +125,9 @@ class FrozenLakeGame:
 
         self.btns_alg = {}
         self._update_alg_buttons()
-<<<<<<< HEAD
 
         self.btn_run = Button((px, 200, 345, 36), "> Run Algorithm")
         self.btn_new_map = Button((px, 242, 345, 32), "[MAP] Generate New Map")
-=======
-        self.btn_run = Button((px, 200, 345, 36), "Run Algorithm")
->>>>>>> a0b2390f0519c0587c62795240cea45b7a4c5e1f
 
     def _update_alg_buttons(self):
         px = GameConfig.GRID * GameConfig.CELL + 12
@@ -159,7 +151,6 @@ class FrozenLakeGame:
         self.policy = None
         self.anim_idx = self.anim_timer = 0
         self.csp_generator = None
-<<<<<<< HEAD
         self.replan_count = 0
         self.stats = {
             "nodes_expanded": 0,
@@ -170,10 +161,6 @@ class FrozenLakeGame:
         if self.log and "Map" not in self.log[-1]:
             self.log = ["Press > Run to start."]
         self.path_log = []
-=======
-        if "Map" not in self.log[-1] if self.log else True:
-            self.log = ["Press Run to start."]
->>>>>>> a0b2390f0519c0587c62795240cea45b7a4c5e1f
 
     # -- Helper tìm đường -----------------------------------------------------
     def _get_alg_result(self, alg_fn, initial_state):
@@ -458,7 +445,6 @@ class FrozenLakeGame:
         else:
             actual_next = next_planned
 
-<<<<<<< HEAD
         self.santa_pos = actual_next
 
         if self.santa_pos == self.house_pos:
@@ -473,16 +459,6 @@ class FrozenLakeGame:
             if self.group in (3, 6):
                 # Local/Adversarial search: luôn allow holes
                 Environment.ALLOW_HOLES = True
-=======
-            self.santa_pos = actual_next
-            
-            if self.santa_pos == self.house_pos:
-                self._finish_game()
-                return
-            
-            if actual_next != next_planned:
-                self.log.append("Lệch hướng! Tính toán lại...")
->>>>>>> a0b2390f0519c0587c62795240cea45b7a4c5e1f
                 alg_fn = ALGORITHMS[self.group][self.alg_name]
                 raw_path, _ = alg_fn(self.grid, self.santa_pos, self.house_pos)
                 if raw_path and len(raw_path) > 1:
@@ -500,30 +476,19 @@ class FrozenLakeGame:
 
         # Log nếu rơi hố
         pos = self.santa_pos
-<<<<<<< HEAD
         if self.grid[pos[0]][pos[1]] == GameConfig.HOLE:
             self.log.append("[~] Rớt hố!")
-=======
-        tile = self.grid[pos[0]][pos[1]]
-        
-        if tile == GameConfig.HOLE:
-            self.log.append(f"Rớt hố!")
->>>>>>> a0b2390f0519c0587c62795240cea45b7a4c5e1f
 
         if pos == self.house_pos and (self.group == 5 or self.anim_idx == len(self.full_path) - 1):
             self._finish_game()
 
     def _finish_game(self):
         self.state = GameState.DONE
-<<<<<<< HEAD
         self.log.append(
             f"[HOME] Hoàn thành! Path:{self.stats['path_length']} | "
             f"Nodes:{self.stats['nodes_expanded']} | "
             f"Replans:{self.stats['replan_count']}"
         )
-=======
-        self.log.append(f"Home! (Hoàn thành)")
->>>>>>> a0b2390f0519c0587c62795240cea45b7a4c5e1f
 
     # -- Draw -----------------------------------------------------------------
     def draw(self):
