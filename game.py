@@ -117,7 +117,7 @@ class FrozenLakeGame:
     def _build_ui(self):
         px = GameConfig.GRID * GameConfig.CELL + 12
         self.tabs = {}
-        tab_names = ["1.Uninf", "2.Infor", "3.Local", "4.Sensr", "5.N-Det", "6.CSP"]
+        tab_names = ["1.Uninf", "2.Infor", "3.Local", "4.Complex", "5.CSP", "6.Advers"]
         for i in range(6):
             col = i % 3
             row = i // 3
@@ -238,7 +238,7 @@ class FrozenLakeGame:
 
     # -- Chạy thuật toán ------------------------------------------------------
     def run_algorithm(self):
-        if self.group == 6:
+        if self.group == 5:
             self.state = GameState.CSP_GEN
             self.csp_generator = ALGORITHMS[self.group][self.alg_name]()
             self.log = [f"Generating map using {self.alg_name}"]
@@ -253,84 +253,84 @@ class FrozenLakeGame:
         t0 = time.perf_counter()
 
         if self.group == 4:
-            # Sensorless
+            # Complex Search: Sensorless / Partial-Obs → sequence of actions
+            #                  AND-OR                  → policy dict
             Environment.ALLOW_HOLES = True
-            path_actions, visited_beliefs = alg_fn(self.grid, initial_state, self.house_pos)
+            result, visited = alg_fn(self.grid, initial_state, self.house_pos)
             elapsed = (time.perf_counter() - t0) * 1000
-            if path_actions:
-                self.raw_path = path_actions
-                self.visited_cells = visited_beliefs
-                self.belief_state = Environment.get_initial_belief(self.grid)
-                self.state = GameState.RUNNING
-                self.stats.update({
-                    "nodes_expanded": len(visited_beliefs),
-                    "path_length":    len(path_actions),
-                    "elapsed_ms":     elapsed,
-                })
-                self.log.append(
-                    f"[{self.alg_name}] Plan:{len(path_actions)} | "
-                    f"Nodes:{len(visited_beliefs)} | {elapsed:.1f}ms"
-                )
-                # Log actions dạng chữ - toàn bộ chuỗi bước
-                ACT_DIR = {"Up": "UP", "Down": "DOWN", "Left": "LEFT", "Right": "RIGHT"}
-                seq = [ACT_DIR.get(a, a) for a in path_actions]
-                self.log.append(f"[OK] [{self.alg_name}]  {len(seq)} steps:")
-                CHUNK = 5
-                for st in range(0, len(seq), CHUNK):
-                    chunk = seq[st:st+CHUNK]
-                    line = " -> ".join(chunk)
-                    if st + CHUNK < len(seq):
-                        line += " ->"
-                    self.log.append(line)
-                self.path_log = list(path_actions)
-            else:
-                self.log.append("No plan found!")
 
-        elif self.group == 5:
-            # Non-deterministic
-            Environment.ALLOW_HOLES = True
-            policy, visited = alg_fn(self.grid, initial_state, self.house_pos)
-            elapsed = (time.perf_counter() - t0) * 1000
-            if policy:
-                self.policy = policy
-                self.visited_cells = visited
-                self.state = GameState.RUNNING
-                self.stats.update({
-                    "nodes_expanded": len(visited),
-                    "path_length":    len(policy),
-                    "elapsed_ms":     elapsed,
-                })
-                self.log.append(
-                    f"[{self.alg_name}] Policy:{len(policy)} states | "
-                    f"Nodes:{len(visited)} | {elapsed:.1f}ms"
-                )
-                # Reconstruct chuỗi hướng đi từ policy (simulate từ start)
-                ACT_DIR = {"Up": "UP", "Down": "DOWN", "Left": "LEFT", "Right": "RIGHT"}
-                ACT_MAP = {"Up": (-1,0), "Down": (1,0), "Left": (0,-1), "Right": (0,1)}
-                seq, cur, seen = [], initial_state, {initial_state}
-                while cur in policy and cur != self.house_pos and len(seq) < 30:
-                    a = policy[cur]
-                    seq.append(ACT_DIR.get(a, a))
-                    dr2, dc2 = ACT_MAP[a]
-                    cur = (cur[0]+dr2, cur[1]+dc2)
-                    if cur in seen:
-                        break
-                    seen.add(cur)
-                self.log.append(f"[OK] [{self.alg_name}]  {len(seq)} steps:")
-                CHUNK = 5
-                for st in range(0, len(seq), CHUNK):
-                    chunk = seq[st:st+CHUNK]
-                    line = " -> ".join(chunk)
-                    if st + CHUNK < len(seq):
-                        line += " ->"
-                    self.log.append(line)
-                self.path_log = []
+            if self.alg_name == "AND-OR":
+                # result là policy dict {state: action}
+                policy = result
+                if policy:
+                    self.policy = policy
+                    self.visited_cells = visited
+                    self.state = GameState.RUNNING
+                    self.stats.update({
+                        "nodes_expanded": len(visited),
+                        "path_length":    len(policy),
+                        "elapsed_ms":     elapsed,
+                    })
+                    self.log.append(
+                        f"[{self.alg_name}] Policy:{len(policy)} states | "
+                        f"Nodes:{len(visited)} | {elapsed:.1f}ms"
+                    )
+                    # Simulate route từ start để hiển thị
+                    ACT_DIR = {"Up": "UP", "Down": "DOWN", "Left": "LEFT", "Right": "RIGHT"}
+                    ACT_MAP = {"Up": (-1,0), "Down": (1,0), "Left": (0,-1), "Right": (0,1)}
+                    seq, cur, seen = [], initial_state, {initial_state}
+                    while cur in policy and cur != self.house_pos and len(seq) < 40:
+                        a = policy[cur]
+                        seq.append(ACT_DIR.get(a, a))
+                        dr2, dc2 = ACT_MAP[a]
+                        cur = (cur[0]+dr2, cur[1]+dc2)
+                        if cur in seen: break
+                        seen.add(cur)
+                    self.log.append(f"[OK] [{self.alg_name}]  {len(seq)} steps (simulated):")
+                    CHUNK = 5
+                    for st in range(0, len(seq), CHUNK):
+                        chunk = seq[st:st+CHUNK]
+                        line = " -> ".join(chunk)
+                        if st + CHUNK < len(seq): line += " ->"
+                        self.log.append(line)
+                    self.path_log = []
+                else:
+                    self.log.append("[ERR] AND-OR: No conditional plan found!")
+
             else:
-                self.log.append("No policy found!")
+                # Sensorless / Partial-Obs: result là list[action_str]
+                path_actions = result
+                if path_actions:
+                    self.raw_path = path_actions
+                    self.visited_cells = visited
+                    self.belief_state = Environment.get_initial_belief(self.grid)
+                    self.state = GameState.RUNNING
+                    self.stats.update({
+                        "nodes_expanded": len(visited),
+                        "path_length":    len(path_actions),
+                        "elapsed_ms":     elapsed,
+                    })
+                    self.log.append(
+                        f"[{self.alg_name}] Plan:{len(path_actions)} steps | "
+                        f"Beliefs:{len(visited)} | {elapsed:.1f}ms"
+                    )
+                    # Log chuỗi hành động
+                    ACT_DIR = {"Up": "UP", "Down": "DOWN", "Left": "LEFT", "Right": "RIGHT"}
+                    seq = [ACT_DIR.get(a, a) for a in path_actions]
+                    self.log.append(f"[OK] [{self.alg_name}]  {len(seq)} actions:")
+                    CHUNK = 5
+                    for st in range(0, len(seq), CHUNK):
+                        chunk = seq[st:st+CHUNK]
+                        line = " -> ".join(chunk)
+                        if st + CHUNK < len(seq): line += " ->"
+                        self.log.append(line)
+                    self.path_log = list(path_actions)
+                else:
+                    self.log.append(f"[ERR] {self.alg_name}: No plan found!")
 
         else:
-            # Group 1, 2, 3
-            if self.group == 3:
+            # Group 1, 2, 3, 6
+            if self.group in (3, 6):
                 Environment.ALLOW_HOLES = True
                 raw_path, raw_visited = alg_fn(self.grid, initial_state, self.house_pos)
             else:
@@ -351,7 +351,6 @@ class FrozenLakeGame:
                     f"[{self.alg_name}] Path:{len(self.full_path)} | "
                     f"Nodes:{len(raw_visited)} | {elapsed:.1f}ms"
                 )
-                # Log đường đi tọa độ
                 self._log_path(self.full_path, self.alg_name)
             else:
                 self.log.append("No path found or stuck!")
@@ -371,51 +370,59 @@ class FrozenLakeGame:
                 self._reset_run()
             return
 
-        # Group 4: Sensorless
+        # Group 4: Complex Search
         if self.group == 4:
-            if self.anim_idx >= len(self.raw_path):
-                self._finish_game()
+            if self.alg_name == "AND-OR":
+                # AND-OR: dùng policy dict, giống cũ group 5
+                if self.santa_pos == self.house_pos:
+                    self._finish_game()
+                    return
+                if self.santa_pos not in self.policy:
+                    self.log.append("Stuck! No policy for state.")
+                    self.state = GameState.DONE
+                    return
+                a = self.policy[self.santa_pos]
+                act_map = {"Up": (-1, 0), "Down": (1, 0), "Left": (0, -1), "Right": (0, 1)}
+                dr, dc = act_map[a]
+                r, c = self.santa_pos
+                if self.grid[r][c] == GameConfig.HOLE:
+                    adr, adc = random.choice([(-1, 0), (1, 0), (0, -1), (0, 1)])
+                    nr, nc = r + adr, c + adc
+                    if 0 <= nr < GameConfig.GRID and 0 <= nc < GameConfig.GRID and self.grid[nr][nc] != GameConfig.MOUNT:
+                        self.santa_pos = (nr, nc)
+                    self.log.append(f"[~] Slip -> {a}")
+                else:
+                    nr, nc = r + dr, c + dc
+                    if 0 <= nr < GameConfig.GRID and 0 <= nc < GameConfig.GRID and self.grid[nr][nc] != GameConfig.MOUNT:
+                        self.santa_pos = (nr, nc)
+                    self.log.append(f"-> {a}")
                 return
-            a = self.raw_path[self.anim_idx]
-            self.belief_state = Environment.sensorless_transition(self.grid, self.belief_state, a)
-            act_map = {"Up": (-1, 0), "Down": (1, 0), "Left": (0, -1), "Right": (0, 1)}
-            dr, dc = act_map[a]
-            r, c = self.santa_pos
-            if self.grid[r][c] == GameConfig.HOLE:
-                adr, adc = random.choice([(-1, 0), (1, 0), (0, -1), (0, 1)])
             else:
-                adr, adc = dr, dc
-            nr, nc = r + adr, c + adc
-            if 0 <= nr < GameConfig.GRID and 0 <= nc < GameConfig.GRID and self.grid[nr][nc] != GameConfig.MOUNT:
-                self.santa_pos = (nr, nc)
-            self.anim_idx += 1
-            return
-
-        # Group 5: Non-deterministic policy
-        if self.group == 5:
-            if self.santa_pos == self.house_pos:
-                self._finish_game()
-                return
-            if self.santa_pos not in self.policy:
-                self.log.append("Stuck! No policy for state.")
-                self.state = GameState.DONE
-                return
-            a = self.policy[self.santa_pos]
-            act_map = {"Up": (-1, 0), "Down": (1, 0), "Left": (0, -1), "Right": (0, 1)}
-            dr, dc = act_map[a]
-            r, c = self.santa_pos
-            if self.grid[r][c] == GameConfig.HOLE:
-                adr, adc = random.choice([(-1, 0), (1, 0), (0, -1), (0, 1)])
+                # Sensorless / Partial-Obs: dùng raw_path (sequence of actions)
+                if self.anim_idx >= len(self.raw_path):
+                    self._finish_game()
+                    return
+                a = self.raw_path[self.anim_idx]
+                # Cập nhật belief state (dùng transition tổng quát)
+                from algorithms.complex import _nondeterministic_results
+                self.belief_state = frozenset(
+                    nb
+                    for (r2, c2) in (self.belief_state or frozenset())
+                    for nb in _nondeterministic_results(self.grid, r2, c2, a)
+                )
+                # Di chuyển Santa thực tế theo action
+                act_map = {"Up": (-1, 0), "Down": (1, 0), "Left": (0, -1), "Right": (0, 1)}
+                dr, dc = act_map[a]
+                r, c = self.santa_pos
+                if self.grid[r][c] == GameConfig.HOLE:
+                    adr, adc = random.choice([(-1, 0), (1, 0), (0, -1), (0, 1)])
+                else:
+                    adr, adc = dr, dc
                 nr, nc = r + adr, c + adc
                 if 0 <= nr < GameConfig.GRID and 0 <= nc < GameConfig.GRID and self.grid[nr][nc] != GameConfig.MOUNT:
                     self.santa_pos = (nr, nc)
-                self.log.append(f"[~] Slip -> {a}")
-            else:
-                nr, nc = r + dr, c + dc
-                if 0 <= nr < GameConfig.GRID and 0 <= nc < GameConfig.GRID and self.grid[nr][nc] != GameConfig.MOUNT:
-                    self.santa_pos = (nr, nc)
-                self.log.append(f"-> {a}")
-            return
+                self.anim_idx += 1
+                return
 
         # Group 1, 2, 3: Path-following với replanning
         if self.anim_idx >= len(self.full_path) - 1:
@@ -449,8 +456,8 @@ class FrozenLakeGame:
             self.log.append("[~] Lệch hướng! Tính toán lại...")
             self.visited_cells.append(actual_next)
 
-            if self.group == 3:
-                # Local search: luôn allow holes
+            if self.group in (3, 6):
+                # Local/Adversarial search: luôn allow holes
                 Environment.ALLOW_HOLES = True
                 alg_fn = ALGORITHMS[self.group][self.alg_name]
                 raw_path, _ = alg_fn(self.grid, self.santa_pos, self.house_pos)
@@ -493,21 +500,33 @@ class FrozenLakeGame:
         if self.state == GameState.CSP_GEN:
             self._draw_csp()
         else:
-            if self.group == 4 and self.belief_state:
-                bsurf = pygame.Surface((GameConfig.CELL, GameConfig.CELL), pygame.SRCALPHA)
-                pygame.draw.rect(bsurf, (147, 112, 219, 120), (0, 0, GameConfig.CELL, GameConfig.CELL))
+            # Group 4 Complex:
+            #   Sensorless / Partial-Obs → vẽ belief state overlay
+            #   AND-OR                   → vẽ policy arrows
+            if self.group == 4 and self.belief_state and self.alg_name != "AND-OR":
+                bsurf = pygame.Surface(
+                    (GameConfig.GRID * GameConfig.CELL, GameConfig.GRID * GameConfig.CELL),
+                    pygame.SRCALPHA
+                )
+                alg_col = GameConfig.ALG_COLORS.get(self.alg_name, (147, 112, 219))
                 for (br, bc) in self.belief_state:
-                    self.screen.blit(bsurf, (bc * GameConfig.CELL, br * GameConfig.CELL))
-            elif self.group == 5 and self.policy:
+                    pygame.draw.rect(
+                        bsurf, (*alg_col, 100),
+                        (bc * GameConfig.CELL + 2, br * GameConfig.CELL + 2,
+                         GameConfig.CELL - 4, GameConfig.CELL - 4),
+                        border_radius=6
+                    )
+                self.screen.blit(bsurf, (0, 0))
+            elif self.group == 4 and self.policy and self.alg_name == "AND-OR":
                 psurf = pygame.Surface(
                     (GameConfig.GRID * GameConfig.CELL, GameConfig.GRID * GameConfig.CELL), pygame.SRCALPHA
                 )
                 for (pr, pc), a in self.policy.items():
                     cx, cy = pc * GameConfig.CELL + 36, pr * GameConfig.CELL + 36
-                    act_map = {"Up": (0, -16), "Down": (0, 16), "Left": (-16, 0), "Right": (16, 0)}
+                    act_map = {"Up": (0, -18), "Down": (0, 18), "Left": (-18, 0), "Right": (18, 0)}
                     dx, dy = act_map[a]
-                    pygame.draw.line(psurf, (255, 99, 71, 200), (cx, cy), (cx + dx, cy + dy), 4)
-                    pygame.draw.circle(psurf, (255, 99, 71, 200), (cx + dx, cy + dy), 4)
+                    pygame.draw.line(psurf, (255, 140, 60, 220), (cx, cy), (cx + dx, cy + dy), 3)
+                    pygame.draw.circle(psurf, (255, 200, 60, 220), (cx + dx, cy + dy), 5)
                 self.screen.blit(psurf, (0, 0))
             else:
                 self._draw_paths()
