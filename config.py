@@ -43,9 +43,14 @@ class GameConfig:
         "BFS": (100,200,255), "DFS": (255,140, 60), "UCS": (100,240,140), 
         "Greedy": (255,100,200), "A*": (255,215, 0), "IDA*":  (218,165, 32),
         "Simple HC": (255,182,193), "Beam": (255,105,180), "Sim Ann": (255,69,0),
-        "S-BFS": (147,112,219), "S-DFS": (186,85,211),
-        "AND-OR Graph": (255,99,71),
-        "Backtracking": (100,200,255), "Forward Check": (255,140, 60)
+        # Group 4 – Complex Search
+        "Sensorless":  (147, 112, 219),   # medium purple
+        "Partial-Obs": (64,  224, 208),   # turquoise
+        "AND-OR":      (255, 140,  60),   # warm orange
+        # Group 5 – CSP
+        "Forward Check": (255, 140, 60), "AC-3": (100, 200, 255), "Min-Conflicts": (255, 69, 0),
+        # Group 6 - Adversarial Search
+        "Minimax": (220, 50, 50), "Alpha-Beta": (180, 40, 100), "Expectimax": (50, 200, 100)
     }
 
 pygame.init()
