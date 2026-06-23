@@ -4,7 +4,7 @@ import random
 import time
 from enum import Enum
 from config import GameConfig, font_lg, font_md, font_sm, font_xs
-from ui import Button, draw_snow_tile, draw_hole_tile, draw_mount_tile, draw_house_tile, draw_santa, draw_rounded_rect
+from ui import Button, draw_snow_tile, draw_hole_tile, draw_mount_tile, draw_house_tile, draw_santa, draw_satan, draw_rounded_rect
 from environment import Environment
 from algorithms import ALGORITHMS
 from algorithms.csp import CSPGenerator
@@ -19,11 +19,11 @@ class GameState(Enum):
 
 class FrozenLakeGame:
     def __init__(self):
-        self.screen = pygame.display.set_mode((GameConfig.W, GameConfig.H))
+        self.screen = pygame.display.set_mode((GameConfig.W, GameConfig.H), pygame.SCALED | pygame.RESIZABLE)
         pygame.display.set_caption("Frozen Lake AI - 6 Algorithm Groups")
         self.clock = pygame.time.Clock()
 
-        self.grid = self.santa_start = self.house_pos = None
+        self.grid = self.santa_start = self.house_pos = self.satan_pos = None
 
         self.group = 1
         self.alg_name = "BFS"
@@ -71,7 +71,7 @@ class FrozenLakeGame:
                 break
         # Chuyển từ {(r,c): tile_type} sang {index: flat_pos} cho _apply_assignment
         formatted = CSPGenerator._to_game_format(last_assignment)
-        if self._apply_assignment(formatted):
+        if self._apply_assignment(formatted, relocate_santa=False):
             self.log = [f"[MAP] Map mới tạo xong! ({GameConfig.GRID}x{GameConfig.GRID})"]
         else:
             self.log = ["[ERR] Tạo map thất bại, thử lại!"]
@@ -96,9 +96,12 @@ class FrozenLakeGame:
             elif items[i] == "Mount":
                 grid[r][c] = GameConfig.MOUNT
 
-        # Khi KHÔNG phải CSP (relocate_santa=True):
-        # nếu Santa trùng nhà, chọn ô SNOW ngẫu nhiên khác
-        if relocate_santa and (s_pos == h_pos or s_pos is None):
+        # relocate_santa=True → Không dùng vị trí CSP, chọn ngẫu nhiên ô SNOW
+        # relocate_santa=False → Dùng vị trí CSP gán; fallback random nếu CSP không cho vị trí hợp lệ
+        if relocate_santa or s_pos is None or s_pos == h_pos:
+            if relocate_santa:
+                # Luôn random (dùng cho map không có CSP)
+                s_pos = None
             snow_cells = [
                 (r2, c2)
                 for r2 in range(GameConfig.GRID)
@@ -110,7 +113,17 @@ class FrozenLakeGame:
             else:
                 return False
 
-        self.grid, self.santa_start, self.house_pos = grid, s_pos, h_pos
+        # Spawn Satan on an empty snow cell
+        satan_cells = [
+            (r2, c2)
+            for r2 in range(GameConfig.GRID)
+            for c2 in range(GameConfig.GRID)
+            if grid[r2][c2] == GameConfig.SNOW and (r2, c2) != h_pos and (r2, c2) != s_pos
+        ]
+        satan_pos = random.choice(satan_cells) if satan_cells else None
+
+        self.grid, self.santa_start, self.house_pos, self.satan_pos = grid, s_pos, h_pos, satan_pos
+        self.is_santa_turn = True
         return True
 
     # -- Xây UI --------------------------------------------------------------
@@ -145,6 +158,7 @@ class FrozenLakeGame:
     def _reset_run(self):
         self.state = GameState.IDLE
         self.santa_pos = self.santa_start
+        self.is_santa_turn = True
         self.full_path, self.visited_cells = [], []
         self.raw_path = []
         self.belief_state = None
@@ -330,7 +344,12 @@ class FrozenLakeGame:
 
         else:
             # Group 1, 2, 3, 6
-            if self.group in (3, 6):
+            if self.group == 6:
+                # Adversarial search is turn-based, calculated in _advance_step
+                self.state = GameState.RUNNING
+                self.log.append(f"[{self.alg_name}] Bắt đầu đối kháng Santa vs Satan!")
+                return
+            elif self.group == 3:
                 Environment.ALLOW_HOLES = True
                 raw_path, raw_visited = alg_fn(self.grid, initial_state, self.house_pos)
             else:
@@ -424,6 +443,43 @@ class FrozenLakeGame:
                 self.anim_idx += 1
                 return
 
+        # Group 6: Adversarial Search (Turn-based)
+        if self.group == 6:
+            alg_fn = ALGORITHMS[self.group][self.alg_name]
+            
+            t0 = time.perf_counter()
+            next_pos, nodes = alg_fn(self.grid, self.santa_pos, self.house_pos, self.satan_pos, self.is_santa_turn, self.visited_cells)
+            elapsed = (time.perf_counter() - t0) * 1000
+
+            actor = "Santa" if self.is_santa_turn else "Satan"
+            dir_str = self._pos_to_dir(self.santa_pos if self.is_santa_turn else self.satan_pos, next_pos)
+            
+            # Apply move
+            if self.is_santa_turn:
+                self.visited_cells.append(self.santa_pos) # Save previous pos
+                self.santa_pos = next_pos
+                self.stats["path_length"] += 1
+            else:
+                self.satan_pos = next_pos
+
+            self.stats["nodes_expanded"] = nodes
+            self.stats["elapsed_ms"] = elapsed
+            
+            self.log.append(f"[{actor}] {dir_str} -> {next_pos} | Nodes: {nodes} ({elapsed:.1f}ms)")
+            
+            # Check Win/Loss conditions
+            if self.santa_pos == self.house_pos:
+                self.log.append("[HOME] Santa chiến thắng! Đã đến được Ngôi nhà.")
+                self.state = GameState.DONE
+                return
+            if self.santa_pos == self.satan_pos:
+                self.log.append("[DEAD] Santa đã bị Satan bắt!")
+                self.state = GameState.DONE
+                return
+                
+            self.is_santa_turn = not self.is_santa_turn
+            return
+
         # Group 1, 2, 3: Path-following với replanning
         if self.anim_idx >= len(self.full_path) - 1:
             self._finish_game()
@@ -456,8 +512,8 @@ class FrozenLakeGame:
             self.log.append("[~] Lệch hướng! Tính toán lại...")
             self.visited_cells.append(actual_next)
 
-            if self.group in (3, 6):
-                # Local/Adversarial search: luôn allow holes
+            if self.group == 3:
+                # Local search: luôn allow holes
                 Environment.ALLOW_HOLES = True
                 alg_fn = ALGORITHMS[self.group][self.alg_name]
                 raw_path, _ = alg_fn(self.grid, self.santa_pos, self.house_pos)
@@ -533,6 +589,7 @@ class FrozenLakeGame:
 
             self._draw_tiles()
             self._draw_santa()
+            self._draw_satan()
 
         self._draw_panel()
         self._draw_bottom_bar()
@@ -610,6 +667,10 @@ class FrozenLakeGame:
     def _draw_santa(self):
         if self.santa_pos:
             draw_santa(self.screen, self.santa_pos[1] * GameConfig.CELL, self.santa_pos[0] * GameConfig.CELL)
+
+    def _draw_satan(self):
+        if self.group == 6 and self.satan_pos:
+            draw_satan(self.screen, self.satan_pos[1] * GameConfig.CELL, self.satan_pos[0] * GameConfig.CELL)
 
     # -- Helper chon mau dong log (xem _draw_panel moi ben duoi) ----------
 
@@ -772,7 +833,7 @@ class FrozenLakeGame:
 
             if self.state in [GameState.RUNNING, GameState.CSP_GEN]:
                 self.anim_timer += dt
-                speed = 20 if self.state == GameState.CSP_GEN else self.anim_speed
+                speed = 100 if self.state == GameState.CSP_GEN else self.anim_speed
                 if self.anim_timer >= speed:
                     self.anim_timer = 0
                     self._advance_step()

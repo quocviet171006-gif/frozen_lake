@@ -10,7 +10,7 @@ def get_image(filename):
         path = os.path.join(BASE_DIR, "assets", filename)
         if os.path.exists(path):
             img = pygame.image.load(path)
-            IMAGES[filename] = pygame.transform.scale(img, (GameConfig.CELL, GameConfig.CELL))
+            IMAGES[filename] = pygame.transform.smoothscale(img, (GameConfig.CELL, GameConfig.CELL))
         else:
             IMAGES[filename] = pygame.Surface((GameConfig.CELL, GameConfig.CELL))
             IMAGES[filename].fill((255, 0, 255))
@@ -41,6 +41,9 @@ def draw_house_tile(surf, x, y):
 
 def draw_santa(surf, x, y):
     surf.blit(get_image("santa.png"), (x, y))
+
+def draw_satan(surf, x, y):
+    surf.blit(get_image("satan.png"), (x, y))
 
 class Button:
     def __init__(self, rect, label, color=None, active=False):
