@@ -26,23 +26,14 @@ def reconstruct_actions(node):
     return actions[::-1]
 
 class Environment:
-    ALLOW_HOLES = True
-
     @staticmethod
     def get_cost_transitions(grid, state, house_pos):
         r, c = state
         transitions = []
         for action, (dr, dc) in zip(["Up", "Down", "Left", "Right"], [(-1,0),(1,0),(0,-1),(0,1)]):
             nr, nc = r+dr, c+dc
-            if 0 <= nr < GameConfig.GRID and 0 <= nc < GameConfig.GRID and grid[nr][nc] != GameConfig.MOUNT:
-                if not Environment.ALLOW_HOLES and grid[nr][nc] == GameConfig.HOLE:
-                    continue
-                # Cost hợp lý: mặc định 1, hố tốn thêm 5 (tránh hố nếu có thể)
-                # KHÔNG dùng cost âm để tránh vòng lặp vô hạn trong UCS/A*
-                cost = 1
-                if grid[nr][nc] == GameConfig.HOLE:
-                    cost = 6
-                transitions.append(((nr, nc), cost, action))
+            if 0 <= nr < GameConfig.GRID and 0 <= nc < GameConfig.GRID and grid[nr][nc] not in [GameConfig.MOUNT, GameConfig.HOLE]:
+                transitions.append(((nr, nc), 1, action))
         return transitions
 
     @staticmethod
@@ -60,7 +51,7 @@ class Environment:
             (r, c)
             for r in range(GameConfig.GRID)
             for c in range(GameConfig.GRID)
-            if grid[r][c] != GameConfig.MOUNT
+            if grid[r][c] not in [GameConfig.MOUNT, GameConfig.HOLE]
         )
 
     @staticmethod

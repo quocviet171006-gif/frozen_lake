@@ -30,7 +30,7 @@ class FrozenLakeGame:
         self.state = GameState.IDLE
 
         self.anim_idx = self.anim_timer = 0
-        self.anim_speed = 120
+        self.anim_speed = 400
         self.santa_pos = None
 
         self.raw_path = []
@@ -61,6 +61,11 @@ class FrozenLakeGame:
 
     # -- Tạo bản đồ ----------------------------------------------------------
     def _instant_map_gen(self):
+        if self.group == 4 and self.alg_name != "AND-OR":
+            self._generate_group4_map()
+            self._reset_run()
+            return
+            
         """Tạo map ngay lập tức bằng CSP backtracking (không animate)."""
         gen = CSPGenerator.generate_map_backtracking()
         last_assignment = {}
@@ -76,6 +81,34 @@ class FrozenLakeGame:
         else:
             self.log = ["[ERR] Tạo map thất bại, thử lại!"]
         self._reset_run()
+
+    def _generate_group4_map(self):
+        grid = [[GameConfig.SNOW] * GameConfig.GRID for _ in range(GameConfig.GRID)]
+        self.santa_pos_list = []
+        
+        for qr in range(2):
+            for qc in range(2):
+                ro, co = qr * 4, qc * 4
+                cells = [(ro+r, co+c) for r in range(4) for c in range(4)]
+                random.shuffle(cells)
+                
+                sr, sc = cells.pop()
+                self.santa_pos_list.append((sr, sc))
+                
+                hr, hc = cells.pop()
+                grid[hr][hc] = GameConfig.HOUSE
+                
+                mr, mc = cells.pop()
+                grid[mr][mc] = GameConfig.MOUNT
+                hor, hoc = cells.pop()
+                grid[hor][hoc] = GameConfig.HOLE
+                
+        self.grid = grid
+        self.santa_start = self.santa_pos_list[0]
+        self.house_pos = (0, 0)
+        self.satan_pos = None
+        self.is_santa_turn = True
+        self.log = [f"[MAP] Tạo 4 Belief States ({GameConfig.GRID}x{GameConfig.GRID})"]
 
     def _apply_assignment(self, res, relocate_santa=True):
         if not res or len(res) < 18:
@@ -163,6 +196,13 @@ class FrozenLakeGame:
         self.raw_path = []
         self.belief_state = None
         self.policy = None
+        
+        if self.group == 4 and self.alg_name != "AND-OR" and hasattr(self, 'santa_pos_list') and self.santa_pos_list:
+            self.current_santas = list(self.santa_pos_list)
+            self.belief_state = frozenset(self.current_santas)
+        else:
+            self.current_santas = []
+
         self.anim_idx = self.anim_timer = 0
         self.csp_generator = None
         self.replan_count = 0
@@ -178,14 +218,9 @@ class FrozenLakeGame:
 
     # -- Helper tìm đường -----------------------------------------------------
     def _get_alg_result(self, alg_fn, initial_state):
-        """Gọi algorithm, thử tránh hố trước, fallback cho phép hố."""
-        Environment.ALLOW_HOLES = False
+        """Gọi algorithm để tìm đường."""
         res, vis = alg_fn(self.grid, initial_state, self.house_pos)
-        if res:
-            return res, vis
-        self.log.append("Không thể né hố -> chấp nhận rủi ro!")
-        Environment.ALLOW_HOLES = True
-        return alg_fn(self.grid, initial_state, self.house_pos)
+        return res, vis
 
     @staticmethod
     def _pos_to_dir(p1, p2):
@@ -228,15 +263,7 @@ class FrozenLakeGame:
             return False
 
         alg_fn = ALGORITHMS[self.group][self.alg_name]
-
-        # Thử tránh hố trước
-        Environment.ALLOW_HOLES = False
         raw_path, _ = alg_fn(self.grid, self.santa_pos, self.house_pos)
-
-        # Fallback: cho phép đi qua hố
-        if not raw_path or len(raw_path) <= 1:
-            Environment.ALLOW_HOLES = True
-            raw_path, _ = alg_fn(self.grid, self.santa_pos, self.house_pos)
 
         if raw_path and len(raw_path) > 1:
             self.full_path = [(s[0], s[1]) for s in raw_path]
@@ -267,10 +294,11 @@ class FrozenLakeGame:
         t0 = time.perf_counter()
 
         if self.group == 4:
-            # Complex Search: Sensorless / Partial-Obs → sequence of actions
-            #                  AND-OR                  → policy dict
-            Environment.ALLOW_HOLES = True
-            result, visited = alg_fn(self.grid, initial_state, self.house_pos)
+            # Complex Search
+            if self.alg_name == "AND-OR":
+                result, visited = alg_fn(self.grid, initial_state, self.house_pos)
+            else:
+                result, visited = alg_fn(self.grid, self.belief_state, self.house_pos)
             elapsed = (time.perf_counter() - t0) * 1000
 
             if self.alg_name == "AND-OR":
@@ -317,7 +345,6 @@ class FrozenLakeGame:
                 if path_actions:
                     self.raw_path = path_actions
                     self.visited_cells = visited
-                    self.belief_state = Environment.get_initial_belief(self.grid)
                     self.state = GameState.RUNNING
                     self.stats.update({
                         "nodes_expanded": len(visited),
@@ -350,7 +377,6 @@ class FrozenLakeGame:
                 self.log.append(f"[{self.alg_name}] Bắt đầu đối kháng Santa vs Satan!")
                 return
             elif self.group == 3:
-                Environment.ALLOW_HOLES = True
                 raw_path, raw_visited = alg_fn(self.grid, initial_state, self.house_pos)
             else:
                 raw_path, raw_visited = self._get_alg_result(alg_fn, initial_state)
@@ -392,7 +418,6 @@ class FrozenLakeGame:
         # Group 4: Complex Search
         if self.group == 4:
             if self.alg_name == "AND-OR":
-                # AND-OR: dùng policy dict, giống cũ group 5
                 if self.santa_pos == self.house_pos:
                     self._finish_game()
                     return
@@ -417,30 +442,32 @@ class FrozenLakeGame:
                     self.log.append(f"-> {a}")
                 return
             else:
-                # Sensorless / Partial-Obs: dùng raw_path (sequence of actions)
+                from algorithms.complex import _transition_belief, SensorlessSearch
+                
+                if SensorlessSearch._is_goal(frozenset(self.current_santas), self.grid):
+                    self._finish_game()
+                    return
+
                 if self.anim_idx >= len(self.raw_path):
                     self._finish_game()
                     return
                 a = self.raw_path[self.anim_idx]
-                # Cập nhật belief state (dùng transition tổng quát)
-                from algorithms.complex import _nondeterministic_results
-                self.belief_state = frozenset(
-                    nb
-                    for (r2, c2) in (self.belief_state or frozenset())
-                    for nb in _nondeterministic_results(self.grid, r2, c2, a)
-                )
-                # Di chuyển Santa thực tế theo action
-                act_map = {"Up": (-1, 0), "Down": (1, 0), "Left": (0, -1), "Right": (0, 1)}
-                dr, dc = act_map[a]
-                r, c = self.santa_pos
-                if self.grid[r][c] == GameConfig.HOLE:
-                    adr, adc = random.choice([(-1, 0), (1, 0), (0, -1), (0, 1)])
-                else:
-                    adr, adc = dr, dc
-                nr, nc = r + adr, c + adc
-                if 0 <= nr < GameConfig.GRID and 0 <= nc < GameConfig.GRID and self.grid[nr][nc] != GameConfig.MOUNT:
-                    self.santa_pos = (nr, nc)
                 self.anim_idx += 1
+
+                new_santas = []
+                for (r, c) in self.current_santas:
+                    if self.grid[r][c] == GameConfig.HOUSE:
+                        new_santas.append((r, c))
+                    elif self.grid[r][c] == GameConfig.HOLE:
+                        outcomes = _transition_belief(self.grid, r, c, a)
+                        new_santas.append(random.choice(outcomes) if outcomes else (r, c))
+                    else:
+                        outcomes = _transition_belief(self.grid, r, c, a)
+                        new_santas.append(outcomes[0] if outcomes else (r, c))
+                        
+                self.current_santas = new_santas
+                self.belief_state = frozenset(self.current_santas)
+                self.log.append(f"-> {a}")
                 return
 
         # Group 6: Adversarial Search (Turn-based)
@@ -588,6 +615,11 @@ class FrozenLakeGame:
                 self._draw_paths()
 
             self._draw_tiles()
+            
+            if self.group == 4 and self.alg_name != "AND-OR":
+                pygame.draw.line(self.screen, GameConfig.C["panel2"], (4 * GameConfig.CELL, 0), (4 * GameConfig.CELL, GameConfig.GRID * GameConfig.CELL), 6)
+                pygame.draw.line(self.screen, GameConfig.C["panel2"], (0, 4 * GameConfig.CELL), (GameConfig.GRID * GameConfig.CELL, 4 * GameConfig.CELL), 6)
+                
             self._draw_santa()
             self._draw_satan()
 
@@ -665,7 +697,10 @@ class FrozenLakeGame:
                     draw_house_tile(self.screen, x, y)
 
     def _draw_santa(self):
-        if self.santa_pos:
+        if self.group == 4 and self.alg_name != "AND-OR" and hasattr(self, 'current_santas') and self.current_santas:
+            for pos in self.current_santas:
+                draw_santa(self.screen, pos[1] * GameConfig.CELL, pos[0] * GameConfig.CELL)
+        elif self.santa_pos:
             draw_santa(self.screen, self.santa_pos[1] * GameConfig.CELL, self.santa_pos[0] * GameConfig.CELL)
 
     def _draw_satan(self):
@@ -809,14 +844,28 @@ class FrozenLakeGame:
                 if e.type == pygame.MOUSEBUTTONDOWN and e.button == 1:
                     for g, btn in self.tabs.items():
                         if btn.clicked(mouse):
+                            old_group = self.group
                             self.group = g
                             self._update_alg_buttons()
-                            self._reset_run()
+                            if old_group != g:
+                                if g == 4 and self.alg_name != "AND-OR":
+                                    self._instant_map_gen()
+                                elif old_group == 4 and self.alg_name != "AND-OR":
+                                    self._instant_map_gen()
+                                else:
+                                    self._reset_run()
 
                     for a, btn in self.btns_alg.items():
                         if btn.clicked(mouse):
+                            old_alg = self.alg_name
                             self.alg_name = a
-                            self._reset_run()
+                            if self.group == 4 and old_alg != a:
+                                if a == "AND-OR" or old_alg == "AND-OR":
+                                    self._instant_map_gen()
+                                else:
+                                    self._reset_run()
+                            else:
+                                self._reset_run()
 
                     if self.btn_run.clicked(mouse):
                         self.run_algorithm()
