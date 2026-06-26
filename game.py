@@ -11,6 +11,13 @@ from algorithms.csp import CSPGenerator
 
 
 class GameState(Enum):
+    """
+    Biểu diễn các trạng thái khác nhau của Vòng lặp Trò chơi.
+    - IDLE: Đang đợi hành động từ người dùng.
+    - RUNNING: Thuật toán đang tìm đường hoặc đang hiển thị hoạt ảnh di chuyển.
+    - DONE: Đã đạt mục tiêu, rơi xuống hố hoặc bị kẹt.
+    - CSP_GEN: Đang tạo bản đồ bằng các thuật toán CSP.
+    """
     IDLE = "idle"
     RUNNING = "running"
     DONE = "done"
@@ -18,13 +25,20 @@ class GameState(Enum):
 
 
 class FrozenLakeGame:
+    """
+    Lớp chính (Main class) quản lý trạng thái, giao diện (UI) và vòng lặp của trò chơi Frozen Lake.
+    Tích hợp tất cả 6 nhóm thuật toán tìm kiếm AI (Uninformed, Informed, Local, Complex, CSP, Adversarial).
+    """
     def __init__(self):
+        # Initialize display
         self.screen = pygame.display.set_mode((GameConfig.W, GameConfig.H), pygame.SCALED | pygame.RESIZABLE)
         pygame.display.set_caption("Frozen Lake AI - 6 Algorithm Groups")
         self.clock = pygame.time.Clock()
 
+        # Map state variables
         self.grid = self.santa_start = self.house_pos = self.satan_pos = None
 
+        # Current configuration
         self.group = 1
         self.alg_name = "BFS"
         self.state = GameState.IDLE
@@ -59,14 +73,17 @@ class FrozenLakeGame:
         # Tạo map ngay lúc khởi động
         self._instant_map_gen()
 
-    # -- Tạo bản đồ ----------------------------------------------------------
+    # -- Map Generation ------------------------------------------------------
     def _instant_map_gen(self):
+        """
+        Thực thi thuật toán sinh bản đồ CSP (ví dụ: Backtracking).
+        Chạy generator đến khi hoàn tất để nhận bản đồ hợp lệ.
+        """
         if self.group == 4 and self.alg_name != "AND-OR":
             self._generate_group4_map()
             self._reset_run()
             return
             
-        """Tạo map ngay lập tức bằng CSP backtracking (không animate)."""
         gen = CSPGenerator.generate_map_backtracking()
         last_assignment = {}
         for a in gen:
@@ -159,8 +176,12 @@ class FrozenLakeGame:
         self.is_santa_turn = True
         return True
 
-    # -- Xây UI --------------------------------------------------------------
+    # -- UI Construction -----------------------------------------------------
     def _build_ui(self):
+        """
+        Khởi tạo các nút bấm cho Giao diện người dùng.
+        Thiết lập các tab nhóm thuật toán, nút chọn thuật toán và nút điều khiển.
+        """
         px = GameConfig.GRID * GameConfig.CELL + 12
         self.tabs = {}
         tab_names = ["1.Uninf", "2.Infor", "3.Local", "4.Complex", "5.CSP", "6.Advers"]
@@ -187,8 +208,12 @@ class FrozenLakeGame:
             self.alg_name = algs[0]
             self.btns_alg[self.alg_name].active = True
 
-    # -- Reset ----------------------------------------------------------------
+    # -- Reset State ----------------------------------------------------------
     def _reset_run(self):
+        """
+        Đặt lại trạng thái của lần chạy hiện tại.
+        Xóa đường đi, vị trí và các thống kê để bắt đầu thực thi mới.
+        """
         self.state = GameState.IDLE
         self.santa_pos = self.santa_start
         self.is_santa_turn = True
@@ -277,8 +302,12 @@ class FrozenLakeGame:
             self.state = GameState.DONE
             return False
 
-    # -- Chạy thuật toán ------------------------------------------------------
+    # -- Algorithm Execution --------------------------------------------------
     def run_algorithm(self):
+        """
+        Chuẩn bị và thực thi thuật toán tìm kiếm đã được chọn.
+        Xử lý các nhóm thuật toán khác nhau và ghi log kết quả.
+        """
         if self.group == 5:
             self.state = GameState.CSP_GEN
             self.csp_generator = ALGORITHMS[self.group][self.alg_name]()

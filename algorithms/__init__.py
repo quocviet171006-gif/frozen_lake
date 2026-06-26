@@ -1,3 +1,8 @@
+"""
+Khởi tạo cho gói (package) thuật toán (algorithms).
+Xuất ra tất cả các danh mục thuật toán tìm kiếm và nhóm chúng vào từ điển ALGORITHMS
+để giao diện người dùng (UI) có thể truy cập động một cách dễ dàng.
+"""
 from algorithms.uninformed import UninformedSearch
 from algorithms.informed import InformedSearch
 from algorithms.local import LocalSearch
