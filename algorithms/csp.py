@@ -33,8 +33,8 @@ FROZEN     = GameConfig.SNOW   # 0
 HOLE       = GameConfig.HOLE   # 1
 MOUNT      = GameConfig.MOUNT  # 2
 HOUSE      = GameConfig.HOUSE  # 4
-SANTA      = 5                 # internal marker
-SANTA_HOUSE = 6                # Santa + House on same cell (goal)
+SANTA      = 5                 # internal marker: vị trí Santa (chỉ dùng nội bộ CSP)
+SANTA_HOUSE = 6                # marker: đây là Ngôi nhà (House/goal)
 
 # ── Limits ───────────────────────────────────────────────────────────────────
 MAX_HOLES  = 10
@@ -55,7 +55,8 @@ class CSPGenerator:
         """Xây dựng variables (list ô) và domains ban đầu."""
         size = GameConfig.GRID
         variables = [(r, c) for r in range(size) for c in range(size)]
-        domains   = {cell: [FROZEN, HOLE, MOUNT, SANTA_HOUSE] for cell in variables}
+        # Mỗi ô có thể là: Tuyết, Hố, Núi, Ngôi nhà, hoặc vị trí Santa
+        domains   = {cell: [FROZEN, HOLE, MOUNT, SANTA_HOUSE, SANTA] for cell in variables}
         return variables, domains
 
     @staticmethod
@@ -72,19 +73,34 @@ class CSPGenerator:
     def _is_consistent(cell, value, assignment):
         """
         Kiểm tra tính nhất quán khi gán value cho cell.
-        - Đúng 1 SANTA_HOUSE trong toàn bộ grid
+        - Đúng 1 SANTA_HOUSE (Ngôi nhà) trong toàn bộ grid
+        - Đúng 1 SANTA (vị trí Santa) trong toàn bộ grid
         - Tối đa MAX_HOLES HOLE và MAX_MOUNTS MOUNT
         - HOLE không kề SANTA_HOUSE
+        - SANTA không đứng cùng ô SANTA_HOUSE, HOLE, MOUNT
         """
         santa_house_count = sum(1 for v in assignment.values() if v == SANTA_HOUSE)
+        santa_count       = sum(1 for v in assignment.values() if v == SANTA)
         hole_count        = sum(1 for v in assignment.values() if v == HOLE)
         mount_count       = sum(1 for v in assignment.values() if v == MOUNT)
 
         if value == SANTA_HOUSE and santa_house_count >= 1:
             return False
+        if value == SANTA and santa_count >= 1:
+            return False
         if value == HOLE  and hole_count  >= MAX_HOLES:
             return False
         if value == MOUNT and mount_count >= MAX_MOUNTS:
+            return False
+
+        # Lấy vị trí hiện tại của các ô đặc biệt
+        existing_santa_house = next((c for c, v in assignment.items() if v == SANTA_HOUSE), None)
+        existing_santa       = next((c for c, v in assignment.items() if v == SANTA), None)
+
+        # SANTA không được đứng trùng Ngôi nhà (cũng không được kề Hố để an toàn)
+        if value == SANTA and existing_santa_house == cell:
+            return False
+        if value == SANTA_HOUSE and existing_santa == cell:
             return False
 
         for nb in CSPGenerator._get_neighbors(cell):
@@ -102,12 +118,14 @@ class CSPGenerator:
         """
         Kiểm tra assignment hoàn chỉnh và hợp lệ:
         - Gán đủ tất cả ô
-        - Đúng 1 SANTA_HOUSE
+        - Đúng 1 SANTA_HOUSE (Ngôi nhà)
+        - Đúng 1 SANTA (vị trí bắt đầu)
         """
         if len(assignment) != GameConfig.GRID * GameConfig.GRID:
             return False
         santa_house_count = sum(1 for v in assignment.values() if v == SANTA_HOUSE)
-        return santa_house_count == 1
+        santa_count       = sum(1 for v in assignment.values() if v == SANTA)
+        return santa_house_count == 1 and santa_count == 1
 
     @staticmethod
     def _select_unassigned_variable(variables, assignment, domains):
@@ -122,7 +140,7 @@ class CSPGenerator:
         """
         Chuyển {(r,c): tile_type} → {index: flat_position} cho game.py.
         Format: index 0 = Santa, 1 = House, 2-11 = Holes, 12-17 = Mounts.
-        Santa và House ở cùng ô (SANTA_HOUSE).
+        Santa (SANTA) và House (SANTA_HOUSE) là 2 ô khác nhau do CSP quyết định.
         """
         if not assignment:
             return None
@@ -133,14 +151,16 @@ class CSPGenerator:
         for cell, val in assignment.items():
             r, c = cell
             flat = r * GameConfig.GRID + c
-            if val == SANTA_HOUSE:
-                s_pos = h_pos = flat
+            if val == SANTA:
+                s_pos = flat
+            elif val == SANTA_HOUSE:
+                h_pos = flat
             elif val == HOLE:
                 holes.append(flat)
             elif val == MOUNT:
                 mounts.append(flat)
 
-        if s_pos is None:
+        if s_pos is None or h_pos is None:
             return None
 
         result = {0: s_pos, 1: h_pos}
@@ -441,7 +461,8 @@ class CSPGenerator:
         def make_initial():
             """
             Tạo assignment hoàn chỉnh ngẫu nhiên:
-            - 1 ô SANTA_HOUSE (đặt ngẫu nhiên)
+            - 1 ô SANTA_HOUSE (Ngôi nhà)
+            - 1 ô SANTA (vị trí bắt đầu của Santa, khác Ngôi nhà)
             - MAX_HOLES ô HOLE
             - MAX_MOUNTS ô MOUNT
             - Còn lại: FROZEN
@@ -450,11 +471,12 @@ class CSPGenerator:
             random.shuffle(cells)
             assignment = {}
             assignment[cells[0]] = SANTA_HOUSE
-            for i in range(1, MAX_HOLES + 1):
+            assignment[cells[1]] = SANTA
+            for i in range(2, MAX_HOLES + 2):
                 assignment[cells[i]] = HOLE
-            for i in range(MAX_HOLES + 1, MAX_HOLES + MAX_MOUNTS + 1):
+            for i in range(MAX_HOLES + 2, MAX_HOLES + MAX_MOUNTS + 2):
                 assignment[cells[i]] = MOUNT
-            for i in range(MAX_HOLES + MAX_MOUNTS + 1, N):
+            for i in range(MAX_HOLES + MAX_MOUNTS + 2, N):
                 assignment[cells[i]] = FROZEN
             return assignment
 
@@ -471,6 +493,11 @@ class CSPGenerator:
                     conflicts += 1
                 if value == SANTA_HOUSE and nb_val == HOLE:
                     conflicts += 1
+            # Santa không được đứng trùng Ngôi nhà
+            if value == SANTA:
+                house_pos = next((c for c, v in assignment.items() if v == SANTA_HOUSE and c != cell), None)
+                if house_pos == cell:
+                    conflicts += 1
             return conflicts
 
         def get_conflicted_cells(assignment):
@@ -483,8 +510,10 @@ class CSPGenerator:
 
         def is_solution(assignment):
             """Kiểm tra assignment là solution hợp lệ."""
-            # Đúng 1 SANTA_HOUSE
+            # Đúng 1 SANTA_HOUSE và 1 SANTA
             if sum(1 for v in assignment.values() if v == SANTA_HOUSE) != 1:
+                return False
+            if sum(1 for v in assignment.values() if v == SANTA) != 1:
                 return False
             # Không có conflict
             return len(get_conflicted_cells(assignment)) == 0
@@ -511,7 +540,8 @@ class CSPGenerator:
 
             # value ← value v that minimizes CONFLICTS(var, v, current, csp)
             # Lấy domain đầy đủ và tìm giá trị min-conflict
-            santa_count = sum(1 for v in current.values() if v == SANTA_HOUSE)
+            santa_house_count = sum(1 for v in current.values() if v == SANTA_HOUSE)
+            santa_count_ex    = sum(1 for k, v in current.items() if v == SANTA and k != var)
             hole_count  = sum(1 for k, v in current.items() if v == HOLE and k != var)
             mount_count = sum(1 for k, v in current.items() if v == MOUNT and k != var)
 
@@ -521,8 +551,11 @@ class CSPGenerator:
             if mount_count < MAX_MOUNTS: candidate_values.append(MOUNT)
             # SANTA_HOUSE: chỉ được gán nếu hiện tại var đang giữ SANTA_HOUSE
             # hoặc chưa có SANTA_HOUSE nào
-            if santa_count == 0 or current[var] == SANTA_HOUSE:
+            if santa_house_count == 0 or current[var] == SANTA_HOUSE:
                 candidate_values.append(SANTA_HOUSE)
+            # SANTA: chỉ được gán nếu var đang giữ SANTA hoặc chưa có SANTA nào
+            if santa_count_ex == 0 or current[var] == SANTA:
+                candidate_values.append(SANTA)
 
             # Chọn value minimizes conflicts
             min_conf  = float('inf')
@@ -542,9 +575,8 @@ class CSPGenerator:
             # set var = value in current
             current[var] = random.choice(best_vals)
 
-            # yield mỗi 20 bước để animate (không quá nhanh)
-            if step % 20 == 0:
-                yield dict(current)
+            # yield mỗi bước để animate hiển thị quá trình sửa lỗi
+            yield dict(current)
 
         # return failure (hết max_steps)
         yield dict(current)

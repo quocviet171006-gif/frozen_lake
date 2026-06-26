@@ -1,23 +1,17 @@
 """
 adversarial.py — Adversarial Search (AIMA Ch. 5)
 ================================================
-Gồm 3 thuật toán: MINIMAX, ALPHA-BETA PRUNING, EXPECTIMAX
+Turn-based game: Santa (MAX) vs Satan (MIN).
 
-Mô hình Adversarial trong Frozen Lake:
-- Santa (MAX) muốn đến đích nhanh nhất.
-- Environment (MIN) điều khiển các ô HỐ (sàn trơn trượt).
-- Tại ô bình thường: Santa đi đâu đến đó (tất định).
-- Tại ô HỐ: 
-  + Minimax: Môi trường ác ý sẽ đẩy Santa về ô xấu nhất (xa đích nhất).
-  + Expectimax: Môi trường ngẫu nhiên đẩy Santa đi 4 hướng (trung bình).
-
-Evaluation Function:
-- eval(s) = 1000 - khoảng cách BFS từ s đến đích.
-- Đến đích: +10000
-
-Mỗi bước đi tốn cost = 1 để khuyến khích đường đi ngắn nhất.
+Evaluation Function (for MAX):
+- Win (Santa at House): +1.0 + (depth * 0.01) (Win faster is better)
+- Lose (Satan at Santa): -1.0 - (depth * 0.01) (Lose slower is better)
+- Otherwise: distance heuristic using BFS to avoid obstacles.
+- Visited penalty: Heavily penalize states Santa has already visited to prevent infinite loops.
 """
 
+import math
+import random
 from collections import deque
 from config import GameConfig
 
@@ -27,8 +21,24 @@ ACT_DELTA = {"Up": (-1, 0), "Down": (1, 0), "Left": (0, -1), "Right": (0, 1)}
 class AdversarialSearch:
 
     @staticmethod
-    def _precompute_eval(grid, goal_pos):
-        """Tính BFS distance từ mọi ô đến đích để làm hàm đánh giá."""
+    def get_valid_moves(grid, pos):
+        """Trả về danh sách các ô có thể đi tới từ pos (không đi vào NÚI và HỐ)."""
+        r, c = pos
+        moves = []
+        for act in ACTIONS:
+            dr, dc = ACT_DELTA[act]
+            nr, nc = r + dr, c + dc
+            if 0 <= nr < GameConfig.GRID and 0 <= nc < GameConfig.GRID:
+                if grid[nr][nc] not in (GameConfig.MOUNT, GameConfig.HOLE):
+                    moves.append((nr, nc))
+        # Nếu bị kẹt, có thể đứng yên
+        if not moves:
+            moves.append(pos)
+        return moves
+
+    @staticmethod
+    def get_bfs_distances(grid, goal_pos):
+        """Tính khoảng cách BFS từ đích đến tất cả các ô hợp lệ."""
         dist = {}
         q = deque([(goal_pos, 0)])
         visited = {goal_pos}
@@ -36,178 +46,232 @@ class AdversarialSearch:
             curr, d = q.popleft()
             dist[curr] = d
             r, c = curr
-            for dr, dc in [(-1, 0), (1, 0), (0, -1), (0, 1)]:
+            for act in ACTIONS:
+                dr, dc = ACT_DELTA[act]
                 nr, nc = r + dr, c + dc
-                if 0 <= nr < GameConfig.GRID and 0 <= nc < GameConfig.GRID and grid[nr][nc] != GameConfig.MOUNT:
-                    if (nr, nc) not in visited:
-                        visited.add((nr, nc))
-                        q.append(((nr, nc), d + 1))
+                if 0 <= nr < GameConfig.GRID and 0 <= nc < GameConfig.GRID:
+                    if grid[nr][nc] not in (GameConfig.MOUNT, GameConfig.HOLE):
+                        if (nr, nc) not in visited:
+                            visited.add((nr, nc))
+                            q.append(((nr, nc), d + 1))
         return dist
 
     @staticmethod
-    def _run_adversarial(grid, start_state, goal_pos, alg_type):
-        """
-        Khung chạy chung cho cả 3 thuật toán.
-        Sinh ra đường đi (path) bằng cách chạy depth-limited search ở mỗi bước.
-        """
-        dist = AdversarialSearch._precompute_eval(grid, goal_pos)
+    def evaluate(santa_pos, satan_pos, house_pos, d, bfs_dist, visited_cells):
+        if santa_pos == house_pos:
+            return 1.0 + (d * 0.01)
+        if santa_pos == satan_pos:
+            return -1.0 - (d * 0.01)
         
-        def evaluate(s):
-            if s == goal_pos: return 10000
-            return 1000 - dist.get(s, 10000)
+        # Khoảng cách thực tế (BFS) tới nhà, nếu kẹt thì coi như rất xa
+        dist_to_house = bfs_dist.get(santa_pos, 1000)
+        
+        # Khoảng cách Manhattan tới Satan (Satan không cần BFS vì nó chỉ cần tránh né cục bộ)
+        dist_to_satan = abs(santa_pos[0] - satan_pos[0]) + abs(santa_pos[1] - satan_pos[1])
+        
+        # Penalty nếu Santa đi vào ô đã đi qua rồi (tránh lặp vô hạn)
+        penalty = 0
+        if visited_cells:
+            count = visited_cells.count(santa_pos)
+            penalty = count * 0.1  # Trừ điểm rất nặng nếu đi vào ô cũ
+        
+        # Công thức: Gần nhà thì tốt (-dist_to_house), Xa satan thì tốt (+dist_to_satan)
+        # Hệ số house lớn hơn để ưu tiên đi tới nhà thay vì chỉ chạy trốn Satan mãi
+        eval_score = (dist_to_satan * 0.5 - dist_to_house * 2.0) / 100.0 - penalty
+        
+        # Đảm bảo điểm số nằm trong khoảng (-1, 1) để không lẫn lộn với điểm Thắng/Thua
+        return max(-0.99, min(0.99, eval_score))
 
-        visited_log = []
+    @staticmethod
+    def minimax(grid, santa_pos, goal_pos, satan_pos, is_santa_turn, visited_cells=None, depth=4):
+        nodes_expanded = [0]
+        bfs_dist = AdversarialSearch.get_bfs_distances(grid, goal_pos)
 
-        def get_outcomes(s, a):
-            r, c = s
-            if grid[r][c] == GameConfig.HOLE:
-                # Môi trường quyết định: có thể trượt sang bất kỳ ô kề nào
-                results = set()
-                for act in ACTIONS:
-                    dr, dc = ACT_DELTA[act]
-                    nr, nc = r + dr, c + dc
-                    if 0 <= nr < GameConfig.GRID and 0 <= nc < GameConfig.GRID and grid[nr][nc] != GameConfig.MOUNT:
-                        results.add((nr, nc))
-                    else:
-                        results.add((r, c))
-                return list(results)
-            else:
-                # Tất định
-                dr, dc = ACT_DELTA[a]
-                nr, nc = r + dr, c + dc
-                if 0 <= nr < GameConfig.GRID and 0 <= nc < GameConfig.GRID and grid[nr][nc] != GameConfig.MOUNT:
-                    return [(nr, nc)]
-                return [(r, c)]
+        def max_value(s_pos, m_pos, d):
+            nodes_expanded[0] += 1
+            if s_pos == goal_pos or s_pos == m_pos or d == 0: 
+                return AdversarialSearch.evaluate(s_pos, m_pos, goal_pos, d, bfs_dist, visited_cells)
 
-        # ==========================================
-        # 1. MINIMAX
-        # ==========================================
-        def minimax_max(s, depth):
-            if len(visited_log) < 5000: visited_log.append(s)
-            if s == goal_pos: return 10000
-            if depth == 0: return evaluate(s)
-            
-            best_val = -float('inf')
-            for a in ACTIONS:
-                val = minimax_min(s, a, depth)
-                if val > best_val: best_val = val
-            return best_val
+            v = -math.inf
+            for nxt in AdversarialSearch.get_valid_moves(grid, s_pos):
+                v = max(v, min_value(nxt, m_pos, d - 1))
+            return v
 
-        def minimax_min(s, a, depth):
-            outcomes = get_outcomes(s, a)
-            if grid[s[0]][s[1]] == GameConfig.HOLE:
-                # MIN (Môi trường) chọn kết quả xấu nhất cho Santa
-                return min(minimax_max(nxt, depth-1) for nxt in outcomes) - 1
-            else:
-                return minimax_max(outcomes[0], depth-1) - 1
+        def min_value(s_pos, m_pos, d):
+            nodes_expanded[0] += 1
+            if s_pos == goal_pos or s_pos == m_pos or d == 0: 
+                return AdversarialSearch.evaluate(s_pos, m_pos, goal_pos, d, bfs_dist, visited_cells)
 
-        # ==========================================
-        # 2. ALPHA-BETA PRUNING
-        # ==========================================
-        def ab_max(s, depth, alpha, beta):
-            if len(visited_log) < 5000: visited_log.append(s)
-            if s == goal_pos: return 10000
-            if depth == 0: return evaluate(s)
-            
-            best_val = -float('inf')
-            for a in ACTIONS:
-                val = ab_min(s, a, depth, alpha, beta)
-                if val > best_val: best_val = val
-                if best_val >= beta: return best_val
-                alpha = max(alpha, best_val)
-            return best_val
+            v = math.inf
+            for nxt in AdversarialSearch.get_valid_moves(grid, m_pos):
+                v = min(v, max_value(s_pos, nxt, d - 1))
+            return v
 
-        def ab_min(s, a, depth, alpha, beta):
-            outcomes = get_outcomes(s, a)
-            if grid[s[0]][s[1]] == GameConfig.HOLE:
-                best_val = float('inf')
-                for nxt in outcomes:
-                    val = ab_max(nxt, depth-1, alpha, beta) - 1
-                    if val < best_val: best_val = val
-                    if best_val <= alpha: return best_val
-                    beta = min(beta, best_val)
-                return best_val
-            else:
-                return ab_max(outcomes[0], depth-1, alpha, beta) - 1
-
-        # ==========================================
-        # 3. EXPECTIMAX
-        # ==========================================
-        def exp_max(s, depth):
-            if len(visited_log) < 5000: visited_log.append(s)
-            if s == goal_pos: return 10000
-            if depth == 0: return evaluate(s)
-            
-            best_val = -float('inf')
-            for a in ACTIONS:
-                val = exp_chance(s, a, depth)
-                if val > best_val: best_val = val
-            return best_val
-
-        def exp_chance(s, a, depth):
-            outcomes = get_outcomes(s, a)
-            if grid[s[0]][s[1]] == GameConfig.HOLE:
-                # CHANCE (Môi trường) lấy trung bình các khả năng
-                avg = sum(exp_max(nxt, depth-1) for nxt in outcomes) / len(outcomes)
-                return avg - 1
-            else:
-                return exp_max(outcomes[0], depth-1) - 1
-
-        # ==========================================
-        # XÂY DỰNG ĐƯỜNG ĐI (PATH RECONSTRUCTION)
-        # ==========================================
-        path = [start_state]
-        curr = start_state
-        MAX_DEPTH = 4  # Giới hạn độ sâu vừa đủ để chạy mượt realtime
-
-        while curr != goal_pos and len(path) < 50:
-            best_val = -float('inf')
-            best_nxt = curr
-            best_a = None
-            
-            for a in ACTIONS:
-                if alg_type == "minimax":
-                    val = minimax_min(curr, a, MAX_DEPTH)
-                elif alg_type == "alphabeta":
-                    val = ab_min(curr, a, MAX_DEPTH, -float('inf'), float('inf'))
-                else:
-                    val = exp_chance(curr, a, MAX_DEPTH)
-                    
+        best_move = None
+        if is_santa_turn:
+            best_val = -math.inf
+            moves = AdversarialSearch.get_valid_moves(grid, santa_pos)
+            random.shuffle(moves) # Random tie-breaking
+            for nxt in moves:
+                val = min_value(nxt, satan_pos, depth - 1)
                 if val > best_val:
                     best_val = val
-                    best_a = a
+                    best_move = nxt
+        else:
+            best_val = math.inf
+            moves = AdversarialSearch.get_valid_moves(grid, satan_pos)
+            random.shuffle(moves)
+            for nxt in moves:
+                val = max_value(santa_pos, nxt, depth - 1)
+                if val < best_val:
+                    best_val = val
+                    best_move = nxt
+
+        if not best_move:
+            best_move = santa_pos if is_santa_turn else satan_pos
+        return best_move, nodes_expanded[0]
+
+    @staticmethod
+    def alpha_beta(grid, santa_pos, goal_pos, satan_pos, is_santa_turn, visited_cells=None, depth=4):
+        nodes_expanded = [0]
+        bfs_dist = AdversarialSearch.get_bfs_distances(grid, goal_pos)
+
+        def max_value(s_pos, m_pos, d, alpha, beta):
+            nodes_expanded[0] += 1
+            if s_pos == goal_pos or s_pos == m_pos or d == 0: 
+                return AdversarialSearch.evaluate(s_pos, m_pos, goal_pos, d, bfs_dist, visited_cells)
+
+            v = -math.inf
+            for nxt in AdversarialSearch.get_valid_moves(grid, s_pos):
+                v = max(v, min_value(nxt, m_pos, d - 1, alpha, beta))
+                if v >= beta: return v
+                alpha = max(alpha, v)
+            return v
+
+        def min_value(s_pos, m_pos, d, alpha, beta):
+            nodes_expanded[0] += 1
+            if s_pos == goal_pos or s_pos == m_pos or d == 0: 
+                return AdversarialSearch.evaluate(s_pos, m_pos, goal_pos, d, bfs_dist, visited_cells)
+
+            v = math.inf
+            for nxt in AdversarialSearch.get_valid_moves(grid, m_pos):
+                v = min(v, max_value(s_pos, nxt, d - 1, alpha, beta))
+                if v <= alpha: return v
+                beta = min(beta, v)
+            return v
+
+        best_move = None
+        if is_santa_turn:
+            best_val = -math.inf
+            alpha = -math.inf
+            beta = math.inf
+            moves = AdversarialSearch.get_valid_moves(grid, santa_pos)
+            random.shuffle(moves)
+            for nxt in moves:
+                val = min_value(nxt, satan_pos, depth - 1, alpha, beta)
+                if val > best_val:
+                    best_val = val
+                    best_move = nxt
+                alpha = max(alpha, best_val)
+        else:
+            best_val = math.inf
+            alpha = -math.inf
+            beta = math.inf
+            moves = AdversarialSearch.get_valid_moves(grid, satan_pos)
+            random.shuffle(moves)
+            for nxt in moves:
+                val = max_value(santa_pos, nxt, depth - 1, alpha, beta)
+                if val < best_val:
+                    best_val = val
+                    best_move = nxt
+                beta = min(beta, best_val)
+
+        if not best_move:
+            best_move = santa_pos if is_santa_turn else satan_pos
+        return best_move, nodes_expanded[0]
+
+    @staticmethod
+    def expectimax(grid, santa_pos, goal_pos, satan_pos, is_santa_turn, visited_cells=None, depth=4):
+        nodes_expanded = [0]
+        bfs_dist = AdversarialSearch.get_bfs_distances(grid, goal_pos)
+
+        def max_value(s_pos, m_pos, d):
+            nodes_expanded[0] += 1
+            if s_pos == goal_pos or s_pos == m_pos or d == 0: 
+                return AdversarialSearch.evaluate(s_pos, m_pos, goal_pos, d, bfs_dist, visited_cells)
+
+            v = -math.inf
+            for nxt in AdversarialSearch.get_valid_moves(grid, s_pos):
+                v = max(v, chance_value(nxt, m_pos, d - 1))
+            return v
+
+        def chance_value(s_pos, m_pos, d):
+            nodes_expanded[0] += 1
+            if s_pos == goal_pos or s_pos == m_pos or d == 0: 
+                return AdversarialSearch.evaluate(s_pos, m_pos, goal_pos, d, bfs_dist, visited_cells)
+
+            moves = AdversarialSearch.get_valid_moves(grid, m_pos)
+            if not moves:
+                return max_value(s_pos, m_pos, d - 1)
+
+            # Satan evaluates his optimal move
+            best_val_for_satan = math.inf
+            best_moves_for_satan = []
             
-            if best_a is None:
-                break
-                
-            outcomes = get_outcomes(curr, best_a)
-            if grid[curr[0]][curr[1]] == GameConfig.HOLE:
-                if alg_type in ["minimax", "alphabeta"]:
-                    # Môi trường ác ý -> ta dự đoán bị đẩy về ô xấu nhất
-                    best_nxt = min(outcomes, key=lambda nxt: evaluate(nxt))
+            evals = []
+            for nxt in moves:
+                val = max_value(s_pos, nxt, d - 1)
+                evals.append((val, nxt))
+                if val < best_val_for_satan:
+                    best_val_for_satan = val
+                    best_moves_for_satan = [nxt]
+                elif val == best_val_for_satan:
+                    best_moves_for_satan.append(nxt)
+
+            optimal_move = random.choice(best_moves_for_satan) if best_moves_for_satan else moves[0]
+            
+            N = len(moves)
+            expected_val = 0
+            for val, nxt in evals:
+                if nxt == optimal_move:
+                    prob = 0.7 + (0.3 / N)
                 else:
-                    # Môi trường ngẫu nhiên -> Expectimax lạc quan hy vọng ô tốt nhất để vẽ đường
-                    best_nxt = max(outcomes, key=lambda nxt: evaluate(nxt))
+                    prob = 0.3 / N
+                expected_val += prob * val
+                
+            return expected_val
+
+        best_move = None
+        if is_santa_turn:
+            best_val = -math.inf
+            moves = AdversarialSearch.get_valid_moves(grid, santa_pos)
+            random.shuffle(moves)
+            for nxt in moves:
+                val = chance_value(nxt, satan_pos, depth - 1)
+                if val > best_val:
+                    best_val = val
+                    best_move = nxt
+        else:
+            moves = AdversarialSearch.get_valid_moves(grid, satan_pos)
+            random.shuffle(moves)
+            if not moves:
+                best_move = satan_pos
             else:
-                best_nxt = outcomes[0]
+                best_val_for_satan = math.inf
+                best_moves_for_satan = []
+                for nxt in moves:
+                    val = max_value(santa_pos, nxt, depth - 1)
+                    if val < best_val_for_satan:
+                        best_val_for_satan = val
+                        best_moves_for_satan = [nxt]
+                    elif val == best_val_for_satan:
+                        best_moves_for_satan.append(nxt)
                 
-            if best_nxt == curr:
-                # Bị kẹt (ví dụ kẹt trong hố và môi trường đẩy ngược lại liên tục)
-                break
-                
-            path.append(best_nxt)
-            curr = best_nxt
+                if random.random() < 0.7 and best_moves_for_satan:
+                    best_move = random.choice(best_moves_for_satan)
+                else:
+                    best_move = random.choice(moves)
 
-        return path, visited_log
-
-    @staticmethod
-    def minimax(grid, start_state, goal_pos, *args):
-        return AdversarialSearch._run_adversarial(grid, start_state, goal_pos, "minimax")
-
-    @staticmethod
-    def alpha_beta(grid, start_state, goal_pos, *args):
-        return AdversarialSearch._run_adversarial(grid, start_state, goal_pos, "alphabeta")
-
-    @staticmethod
-    def expectimax(grid, start_state, goal_pos, *args):
-        return AdversarialSearch._run_adversarial(grid, start_state, goal_pos, "expectimax")
+        if not best_move:
+            best_move = santa_pos if is_santa_turn else satan_pos
+        return best_move, nodes_expanded[0]
