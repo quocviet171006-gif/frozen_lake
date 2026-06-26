@@ -11,23 +11,28 @@ ACTIONS   = ["Up", "Down", "Left", "Right"]
 ACT_DELTA = {"Up": (-1, 0), "Down": (1, 0), "Left": (0, -1), "Right": (0, 1)}
 
 
-def _in_bounds(r, c):
-    return 0 <= r < GameConfig.GRID and 0 <= c < GameConfig.GRID
+def _in_bounds(grid, r, c, nr, nc):
+    if not (0 <= nr < len(grid) and 0 <= nc < len(grid[0])):
+        return False
+    if r // 4 != nr // 4 or c // 4 != nc // 4:
+        return False
+    return True
 
 
-def _transition_belief(grid, r, c, action):
+def _transition_belief(grid, r, c, action, block_holes=False):
     """
-    Mô hình chuyển đổi trạng thái (Transition model) cho tìm kiếm Không cảm biến (SENSORLESS)
-    và Quan sát cục bộ (PARTIAL-OBS).
-    - Ô tuyết (SNOW): Di chuyển chắc chắn đến ô đích (hoặc đứng yên nếu bị chặn bởi ranh giới/núi).
-    - Ô hố (HOLE): Bị trượt ngẫu nhiên sang các ô lân cận hợp lệ (có thể lên tới 4 kết quả khác nhau).
+    Mô hình chuyển đổi trạng thái. 
+    Nếu Santa đang ở House, thì dừng lại (không di chuyển nữa).
     """
-    if grid[r][c] == GameConfig.HOLE:
+    if grid[r][c] == GameConfig.HOUSE:
+        return [(r, c)]
+        
+    if grid[r][c] == GameConfig.HOLE and not block_holes:
         results = set()
         for a in ACTIONS:
             dr2, dc2 = ACT_DELTA[a]
             nr, nc = r + dr2, c + dc2
-            if _in_bounds(nr, nc) and grid[nr][nc] != GameConfig.MOUNT:
+            if _in_bounds(grid, r, c, nr, nc) and grid[nr][nc] != GameConfig.MOUNT:
                 results.add((nr, nc))
             else:
                 results.add((r, c))
@@ -35,23 +40,30 @@ def _transition_belief(grid, r, c, action):
     else:
         dr, dc = ACT_DELTA[action]
         nr, nc = r + dr, c + dc
-        if _in_bounds(nr, nc) and grid[nr][nc] != GameConfig.MOUNT:
+        
+        is_blocked = False
+        if not _in_bounds(grid, r, c, nr, nc):
+            is_blocked = True
+        elif grid[nr][nc] == GameConfig.MOUNT:
+            is_blocked = True
+        elif block_holes and grid[nr][nc] == GameConfig.HOLE:
+            is_blocked = True
+            
+        if not is_blocked:
             return [(nr, nc)]
-        return [(r, c)]   # bị chặn → đứng yên
+        return [(r, c)]
 
 
 def _transition_andor(grid, r, c, action):
-    """
-    Mô hình chuyển đổi trạng thái (Transition model) cho tìm kiếm AND-OR.
-    - Ô tuyết (SNOW): Hành động hợp lệ trả về 1 kết quả; nếu bị chặn trả về danh sách rỗng [] (bỏ qua hành động).
-    - Ô hố (HOLE): Bị trượt ngẫu nhiên lên tới 4 kết quả khác nhau (Thực sự là một nút AND).
-    """
+    if grid[r][c] == GameConfig.HOUSE:
+        return [(r, c)]
+        
     if grid[r][c] == GameConfig.HOLE:
         results = set()
         for a in ACTIONS:
             dr2, dc2 = ACT_DELTA[a]
             nr, nc = r + dr2, c + dc2
-            if _in_bounds(nr, nc) and grid[nr][nc] != GameConfig.MOUNT:
+            if _in_bounds(grid, r, c, nr, nc) and grid[nr][nc] != GameConfig.MOUNT:
                 results.add((nr, nc))
             else:
                 results.add((r, c))
@@ -59,9 +71,9 @@ def _transition_andor(grid, r, c, action):
     else:
         dr, dc = ACT_DELTA[action]
         nr, nc = r + dr, c + dc
-        if _in_bounds(nr, nc) and grid[nr][nc] != GameConfig.MOUNT:
+        if _in_bounds(grid, r, c, nr, nc) and grid[nr][nc] != GameConfig.MOUNT:
             return [(nr, nc)]
-        return []   # bị chặn → action không áp dụng (skip)
+        return []
 
 
 
@@ -84,9 +96,13 @@ class SensorlessSearch:
     """
 
     @staticmethod
-    def _is_goal(belief: frozenset, goal_pos: tuple) -> bool:
-        """Belief state là goal khi chắc chắn Santa ở goal_pos."""
-        return len(belief) == 1 and goal_pos in belief
+    def _is_goal(grid, belief: frozenset) -> bool:
+        """Đạt đích khi TẤT CẢ các trạng thái trong belief đều là HOUSE."""
+        if not belief: return False
+        for r, c in belief:
+            if grid[r][c] != GameConfig.HOUSE:
+                return False
+        return True
 
     @staticmethod
     def _predict(grid, belief: frozenset, action: str) -> frozenset:
@@ -108,15 +124,12 @@ class SensorlessSearch:
             - actions        : list[str]       — Danh sách các hành động cần thực thi
             - visited_beliefs: list[frozenset] — Lịch sử các trạng thái niềm tin đã duyệt qua
         """
-        # Belief ban đầu = tất cả ô không phải núi (Santa có thể ở đâu cũng được)
-        initial_belief = frozenset(
-            (r, c)
-            for r in range(GameConfig.GRID)
-            for c in range(GameConfig.GRID)
-            if grid[r][c] != GameConfig.MOUNT
-        )
+        if isinstance(start_state, frozenset):
+            initial_belief = start_state
+        else:
+            initial_belief = frozenset([start_state])
 
-        if SensorlessSearch._is_goal(initial_belief, goal_pos):
+        if SensorlessSearch._is_goal(grid, initial_belief):
             return [], [initial_belief]
 
         # BFS trên không gian belief state
@@ -125,9 +138,13 @@ class SensorlessSearch:
         explored = {initial_belief}
         visited_beliefs = []
 
+        MAX_NODES = 5000
         while frontier:
             node = frontier.popleft()
             visited_beliefs.append(node.state)
+            
+            if len(explored) > MAX_NODES:
+                break
 
             for action in ACTIONS:
                 new_belief = SensorlessSearch._predict(grid, node.state, action)
@@ -136,7 +153,7 @@ class SensorlessSearch:
 
                 child = Node(new_belief, parent=node, action=action)
 
-                if SensorlessSearch._is_goal(new_belief, goal_pos):
+                if SensorlessSearch._is_goal(grid, new_belief):
                     visited_beliefs.append(new_belief)
                     return reconstruct_actions(child), visited_beliefs
 
@@ -176,73 +193,48 @@ class PartialObservableSearch:
             - actions        : list[str]       — Danh sách các hành động
             - visited_beliefs: list[frozenset] — Lịch sử các trạng thái niềm tin
         """
-        # Belief ban đầu: tất cả ô không phải núi
-        initial_belief = frozenset(
-            (r, c)
-            for r in range(GameConfig.GRID)
-            for c in range(GameConfig.GRID)
-            if grid[r][c] != GameConfig.MOUNT
-        )
+        if isinstance(start_state, frozenset):
+            initial_belief = start_state
+        else:
+            initial_belief = frozenset([start_state])
+            
+        if SensorlessSearch._is_goal(grid, initial_belief):
+            return [], [initial_belief]
 
-        # Lọc belief ban đầu theo observation tại start_state
-        sr, sc = start_state
-        init_obs = grid[sr][sc]
-        filtered_init = frozenset(
-            (r, c) for (r, c) in initial_belief
-            if grid[r][c] == init_obs
-        )
-        if not filtered_init:
-            filtered_init = initial_belief
-
-        # Kiểm tra ngay
-        if len(filtered_init) == 1 and goal_pos in filtered_init:
-            return [], [filtered_init]
-
-        # BFS trên filtered belief space
-        root = Node(filtered_init)
+        root = Node(initial_belief)
         frontier = deque([root])
-        explored = {filtered_init}
+        explored = {initial_belief}
         visited_beliefs = []
 
+        MAX_NODES = 5000
         while frontier:
             node = frontier.popleft()
             visited_beliefs.append(node.state)
+            
+            if len(explored) > MAX_NODES:
+                break
 
             for action in ACTIONS:
-                # PREDICT: áp dụng action lên tất cả ô trong belief
                 predicted = set()
                 for (r, c) in node.state:
-                    for (nr, nc) in _transition_belief(grid, r, c, action):
+                    for (nr, nc) in _transition_belief(grid, r, c, action, block_holes=True):
                         predicted.add((nr, nc))
 
                 if not predicted:
                     continue
 
-                # UPDATE: thử từng observation khả dĩ
-                possible_obs = {grid[r][c] for (r, c) in predicted}
+                new_belief = frozenset(predicted)
+                if new_belief in explored:
+                    continue
 
-                for obs in possible_obs:
-                    new_belief = frozenset(
-                        (r, c) for (r, c) in predicted
-                        if grid[r][c] == obs
-                    )
-                    if not new_belief or new_belief in explored:
-                        continue
+                child = Node(new_belief, parent=node, action=action)
 
-                    child = Node(new_belief, parent=node, action=action)
+                if SensorlessSearch._is_goal(grid, new_belief):
+                    visited_beliefs.append(new_belief)
+                    return reconstruct_actions(child), visited_beliefs
 
-                    # Goal: belief thu gọn còn chỉ goal_pos
-                    if len(new_belief) == 1 and goal_pos in new_belief:
-                        visited_beliefs.append(new_belief)
-                        return reconstruct_actions(child), visited_beliefs
-
-                    # Hoặc: goal_pos nằm trong belief VÀ obs khớp tile của goal
-                    if goal_pos in new_belief and grid[goal_pos[0]][goal_pos[1]] == obs:
-                        visited_beliefs.append(new_belief)
-                        return reconstruct_actions(child), visited_beliefs
-
-                    explored.add(new_belief)
-                    frontier.append(child)
+                explored.add(new_belief)
+                frontier.append(child)
 
         return [], visited_beliefs
 
@@ -268,7 +260,7 @@ class AndOrSearch:
         import sys
         sys.setrecursionlimit(100000)
 
-        MAX_DEPTH     = GameConfig.GRID * GameConfig.GRID
+        MAX_DEPTH     = len(grid) * len(grid[0]) * 2
         failed_states = set()    # state chứng minh thất bại (safe to cache)
         success_cache = {}       # state → plan đã tìm được (safe to cache)
 
