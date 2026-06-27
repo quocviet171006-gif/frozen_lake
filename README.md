@@ -151,9 +151,15 @@ python main.py
 | **DFS** | Tìm kiếm theo chiều sâu | Tốn ít bộ nhớ, LIFO stack |
 | **UCS** | Tìm kiếm chi phí đồng nhất | Tối ưu theo cost, priority queue |
 
-#### Chạy mô phỏng thuật toán
-- BFS
-> ![bfs](images/bfs.gif)
+#### **Chạy mô phỏng thuật toán**
+- **BFS**
+> ![BFS](images/BFS.gif)
+
+- **DFS**
+> ![DFS](images/DFS.gif)
+
+- **UCS**
+> ![UCS](images/UCS.gif)
 
 ---
 
@@ -171,6 +177,16 @@ python main.py
 | **A\*** | `f(n) = g(n) + h(n)` | Tối ưu, admissible heuristic |
 | **IDA\*** | `f(n) ≤ threshold` tăng dần | Tiết kiệm bộ nhớ, tìm kiếm lặp sâu |
 
+#### **Chạy mô phỏng thuật toán**
+- **Greedy Search**
+> ![GS](images/GS.gif)
+
+- **Asao**
+> ![Asao](images/Asao.gif)
+
+- **IDAsao**
+> ![IDAsao](images/IDAsao.gif)
+
 ---
 
 ### Nhóm 3 — Tìm kiếm cục bộ (Local Search)
@@ -185,6 +201,16 @@ python main.py
 | **Local Beam Search** | Duy trì k=2 trạng thái song song | beam width k=2 |
 | **Simulated Annealing** | Chấp nhận bước tệ với xác suất `e^(-Δ/T)`, hạ nhiệt dần | T₀=100, Tₘᵢₙ=1, α=0.95 |
 
+#### **Chạy mô phỏng thuật toán**
+- **Simple Hill Climbing**
+> ![SimpleHC](images/SimpleHC.gif)
+
+- **Local Beam Search**
+> ![LocalBeam](images/LocalBeam.gif)
+
+- **Simulated Annealing**
+> ![SimulatedAnnealing](images/SimulatedAnnealing.gif)
+
 ---
 
 ### Nhóm 4 — Tìm kiếm trong môi trường phức tạp (Complex Environment Search)
@@ -198,6 +224,16 @@ python main.py
 | **Sensorless BFS** | Conformant Planning | BFS trên không gian belief state — hoạt động khi không có cảm biến |
 | **Partial-Obs BFS** | Partially Observable | BFS có quan sát một phần môi trường |
 | **AND-OR Search** | Non-deterministic | Cây AND-OR với môi trường không tất định |
+
+#### **Chạy mô phỏng thuật toán**
+- **Sensorless BFS**
+> ![Sensorless](images/Sensorless.gif)
+
+- **Partial-Obs BFS**
+> ![PartialObs](images/PartialObs.gif)
+
+- **AND-OR Search**
+> ![AndOr](images/AndOr.gif)
 
 ---
 
@@ -220,6 +256,16 @@ Nhóm CSP **không tìm đường đi** mà **sinh bản đồ** thỏa mãn rà
 | **AC-3** | Tiền xử lý arc-consistency → sau đó backtrack |
 | **Min-Conflicts** | Local search: gán ngẫu nhiên rồi sửa ô vi phạm ràng buộc nhiều nhất |
 
+#### **Chạy mô phỏng thuật toán**
+- **Forward Checking**
+> ![ForwardChecking](images/ForwardChecking.gif)
+
+- **AC-3**
+> ![AC3](images/AC3.gif)
+
+- **Min-Conflicts**
+> ![MinConflicts](images/MinConflicts.gif)
+
 ---
 
 ### Nhóm 6 — Tìm kiếm đối kháng (Adversarial Search)
@@ -237,6 +283,16 @@ Mô hình đối kháng trong Frozen Lake:
 | **Minimax** | Santa tìm nước đi tốt nhất cho mình, Satan tìm nước đi tốt nhất để bắt Santa |
 | **Alpha-Beta** | Minimax có cắt tỉa nhánh — hiệu quả hơn |
 | **Expectimax** | Satan đi ngẫu nhiên — lấy trung bình các outcomes |
+
+#### **Chạy mô phỏng thuật toán**
+- **Minimax**
+> ![Minimax](images/Minimax.gif)
+
+- **Alpha-Beta**
+> ![AlphaBeta](images/AlphaBeta.gif)
+
+- **Expectimax**
+> ![Expectimax](images/Expectimax.gif)
 
 ---
 
@@ -299,7 +355,6 @@ ALGORITHMS = {
 | | Nguyễn Quốc Việt - 24110381|
 | **Trường** | ĐH Công nghệ Kỹ thuật TP.HCM (HCMUTE) |
 | **Môn học** | Trí Tuệ Nhân Tạo |
-| **GitHub** | [@quocviet171006-gif](https://github.com/quocviet171006-gif) |
 
 ---
 
