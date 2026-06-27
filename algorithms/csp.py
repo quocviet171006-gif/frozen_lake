@@ -1,27 +1,27 @@
 """
-csp.py — Constraint Satisfaction Problem (AIMA Ch. 6)
+csp.py — Bài toán thỏa mãn ràng buộc (CSP - AIMA Ch. 6)
 ======================================================
-3 thuật toán sinh map cho Frozen Lake dựa trên CSP:
+Cung cấp 3 thuật toán để tạo bản đồ cho mô phỏng Frozen Lake dựa trên CSP.
 
-Mô hình chung (CSP Map Generation):
-  Variables : tất cả ô (r,c) trong grid N×N
-  Domain    : {FROZEN, HOLE, MOUNT, SANTA_HOUSE}
-               SANTA_HOUSE = Santa + House cùng 1 ô (goal state)
-  Constraints:
+Mô hình chung tạo bản đồ CSP:
+  - Biến (Variables): Tất cả các ô (r, c) trong lưới NxN
+  - Miền giá trị (Domain): {FROZEN, HOLE, MOUNT, SANTA_HOUSE} (SANTA_HOUSE = Đích đến)
+  
+  Ràng buộc (Constraints):
     - Đúng 1 ô SANTA_HOUSE
-    - Tối đa 10 HOLE, tối đa 6 MOUNT
-    - HOLE không kề SANTA_HOUSE (constraint an toàn)
-    - Có đường đi từ Santa đến House (sau khi gán xong)
+    - Tối đa 10 Hố (HOLE), tối đa 6 Núi (MOUNT)
+    - Hố không được nằm kề SANTA_HOUSE (ràng buộc an toàn)
+    - Phải có đường đi hợp lệ từ Santa đến Nhà (sau khi gán xong)
 
-Ý tưởng hiển thị (giống Forward Checking):
-  - Vật phẩm (Hole, Mount, House) xuất hiện dần trên bản đồ
-  - Santa được đặt ở ô cuối trùng với ngôi nhà (SANTA_HOUSE)
-  - Generator yield từng trạng thái gán để animation
+Mô phỏng (Theo phong cách Forward Checking):
+  - Các vật phẩm (Hố, Núi, Nhà) xuất hiện dần trên bản đồ
+  - Santa được đặt ở một ô riêng biệt với Nhà
+  - Hàm Generator yield từng trạng thái gán để tạo hoạt ảnh
 
-Thuật toán:
-  1. Backtracking + Forward Checking (AIMA Fig. 6.5 + FC)
-  2. AC-3 (AIMA Fig. 6.3) → tiền xử lý → rồi backtrack
-  3. Min-Conflicts (AIMA Fig. 6.8) → local search trực tiếp
+Các thuật toán đã triển khai:
+  1. Quay lui (Backtracking) + Forward Checking (AIMA Fig. 6.5 + FC)
+  2. AC-3 (AIMA Fig. 6.3) → tiền xử lý → sau đó quay lui
+  3. Min-Conflicts (AIMA Fig. 6.8) → tìm kiếm cục bộ trực tiếp
 """
 
 import random
@@ -195,25 +195,11 @@ class CSPGenerator:
     @staticmethod
     def generate_map_forward_checking():
         """
-        Backtracking Search kết hợp Forward Checking.
+        Tìm kiếm quay lui (Backtracking Search) kết hợp Forward Checking.
 
-        Pseudocode:
-          function BACKTRACK(csp, assignment) returns solution or failure
-            if assignment is complete → return assignment
-            var ← SELECT-UNASSIGNED-VARIABLE(csp, assignment)   // MRV
-            for each value in ORDER-DOMAIN-VALUES(csp, var):
-              if value is consistent:
-                add {var = value} to assignment
-                inferences ← FORWARD-CHECKING(csp, var, value, assignment)
-                if inferences ≠ failure:
-                  result ← BACKTRACK(csp, assignment ∪ inferences)
-                  if result ≠ failure → return result
-                remove {var = value} and inferences from assignment
-            return failure
-
-        Forward Checking: sau khi gán var=value, với mỗi ô kề chưa gán,
-        xóa các giá trị vi phạm constraint khỏi domain.
-        Nếu domain rỗng → prune ngay.
+        Forward Checking đảm bảo rằng sau khi gán var=value, chúng ta kiểm tra tất cả
+        các ô lân cận chưa được gán và loại bỏ các giá trị vi phạm ràng buộc khỏi miền giá trị của chúng.
+        Nếu bất kỳ miền giá trị nào trở nên rỗng, không gian tìm kiếm sẽ được cắt tỉa (prune) sớm.
         """
         variables, domains = CSPGenerator._build_csp()
         random.shuffle(variables)
@@ -284,29 +270,13 @@ class CSPGenerator:
     @staticmethod
     def generate_map_ac3():
         """
-        AC-3 (Arc Consistency 3) + Backtracking.
+        AC-3 (Arc Consistency 3) + Tìm kiếm quay lui (Backtracking).
 
-        Bước 1: Chạy AC-3 để thu hẹp domains trước khi tìm kiếm.
-        Bước 2: Backtracking trên domains đã được thu hẹp.
+        Bước 1: Chạy AC-3 để buộc tính nhất quán cung (arc consistency) và thu hẹp miền giá trị.
+        Bước 2: Chạy quay lui trên các miền giá trị đã được thu hẹp.
 
-        Pseudocode AC-3:
-          function AC-3(csp) returns csp with reduced domains
-            queue ← tất cả arcs (Xi, Xj) trong csp
-            while queue not empty:
-              (Xi, Xj) ← REMOVE-FIRST(queue)
-              if RM-INCONSISTENT-VALUES(Xi, Xj):
-                for each Xk in NEIGHBORS[Xi]:
-                  add (Xk, Xi) to queue
-
-          function RM-INCONSISTENT-VALUES(Xi, Xj):
-            removed ← false
-            for each x in DOMAIN[Xi]:
-              if no y in DOMAIN[Xj] allows (x,y) to satisfy constraint(Xi,Xj):
-                delete x from DOMAIN[Xi]; removed ← true
-            return removed
-
-        Constraint giữa các ô kề:
-          (HOLE, SANTA_HOUSE) và (SANTA_HOUSE, HOLE) là bất nhất quán.
+        Ràng buộc giữa các ô lân cận:
+          - (HOLE, SANTA_HOUSE) và (SANTA_HOUSE, HOLE) là không nhất quán.
         """
         variables, domains = CSPGenerator._build_csp()
         random.shuffle(variables)
@@ -434,24 +404,14 @@ class CSPGenerator:
     @staticmethod
     def generate_map_min_conflicts(max_steps=2000):
         """
-        Min-Conflicts: local search trực tiếp trên assignment hoàn chỉnh.
+        Tối thiểu xung đột (Min-Conflicts): Tìm kiếm cục bộ trực tiếp trên một phép gán hoàn chỉnh.
 
-        Pseudocode (AIMA Fig. 6.8):
-          function MIN-CONFLICTS(csp, max_steps) returns solution or failure
-            current ← initial complete assignment for csp
-            for i = 1 to max_steps:
-              if current is a solution → return current
-              var ← randomly chosen CONFLICTED variable from csp.VARIABLES
-              value ← the value v for var that minimizes CONFLICTS(var,v,current,csp)
-              set var = value in current
-            return failure
-
-        Áp dụng cho map generation:
-        - Initial assignment: gán ngẫu nhiên đủ tile cho tất cả ô.
-          Đảm bảo đúng số lượng: 1 SANTA_HOUSE, 10 HOLE, 6 MOUNT, còn lại FROZEN.
-        - Conflicted variable: ô đang vi phạm constraint.
-        - CONFLICTS(var, v): đếm số constraint bị vi phạm khi gán v cho var.
-        - Lặp cho đến khi không còn conflict hoặc hết max_steps.
+        Ứng dụng cho việc tạo bản đồ:
+        - Phép gán ban đầu: gán ngẫu nhiên đủ số lượng gạch cho tất cả các ô.
+          (1 SANTA_HOUSE, 10 HOLE, 6 MOUNT, còn lại là FROZEN).
+        - Biến xung đột (Conflicted variable): một ô đang vi phạm ràng buộc.
+        - CONFLICTS(var, v): đếm số lượng vi phạm ràng buộc khi gán v cho var.
+        - Lặp lại cho đến khi không còn xung đột hoặc đạt đến max_steps.
         """
 
         size = GameConfig.GRID

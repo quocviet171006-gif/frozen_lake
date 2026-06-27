@@ -11,6 +11,13 @@ from algorithms.csp import CSPGenerator
 
 
 class GameState(Enum):
+    """
+    Biểu diễn các trạng thái khác nhau của Vòng lặp Trò chơi.
+    - IDLE: Đang đợi hành động từ người dùng.
+    - RUNNING: Thuật toán đang tìm đường hoặc đang hiển thị hoạt ảnh di chuyển.
+    - DONE: Đã đạt mục tiêu, rơi xuống hố hoặc bị kẹt.
+    - CSP_GEN: Đang tạo bản đồ bằng các thuật toán CSP.
+    """
     IDLE = "idle"
     RUNNING = "running"
     DONE = "done"
@@ -18,13 +25,20 @@ class GameState(Enum):
 
 
 class FrozenLakeGame:
+    """
+    Lớp chính (Main class) quản lý trạng thái, giao diện (UI) và vòng lặp của trò chơi Frozen Lake.
+    Tích hợp tất cả 6 nhóm thuật toán tìm kiếm AI (Uninformed, Informed, Local, Complex, CSP, Adversarial).
+    """
     def __init__(self):
+        # Initialize display
         self.screen = pygame.display.set_mode((GameConfig.W, GameConfig.H), pygame.SCALED | pygame.RESIZABLE)
         pygame.display.set_caption("Frozen Lake AI - 6 Algorithm Groups")
         self.clock = pygame.time.Clock()
 
+        # Map state variables
         self.grid = self.santa_start = self.house_pos = self.satan_pos = None
 
+        # Current configuration
         self.group = 1
         self.alg_name = "BFS"
         self.state = GameState.IDLE
@@ -59,14 +73,17 @@ class FrozenLakeGame:
         # Tạo map ngay lúc khởi động
         self._instant_map_gen()
 
-    # -- Tạo bản đồ ----------------------------------------------------------
+    # -- Map Generation ------------------------------------------------------
     def _instant_map_gen(self):
+        """
+        Thực thi thuật toán sinh bản đồ CSP (ví dụ: Backtracking).
+        Chạy generator đến khi hoàn tất để nhận bản đồ hợp lệ.
+        """
         if self.group == 4 and self.alg_name != "AND-OR":
             self._generate_group4_map()
             self._reset_run()
             return
             
-        """Tạo map ngay lập tức bằng CSP backtracking (không animate)."""
         gen = CSPGenerator.generate_map_backtracking()
         last_assignment = {}
         for a in gen:
@@ -85,34 +102,84 @@ class FrozenLakeGame:
     def _generate_group4_map(self):
         grid = [[GameConfig.SNOW] * GameConfig.GRID for _ in range(GameConfig.GRID)]
         self.santa_pos_list = []
+        self.known_obstacles = set()
         
-        for qr in range(2):
-            for qc in range(2):
-                ro, co = qr * 4, qc * 4
-                cells = [(ro+r, co+c) for r in range(4) for c in range(4)]
-                random.shuffle(cells)
-                
-                sr, sc = cells.pop()
-                self.santa_pos_list.append((sr, sc))
-                
-                hr, hc = cells.pop()
-                grid[hr][hc] = GameConfig.HOUSE
-                
-                mr, mc = cells.pop()
-                grid[mr][mc] = GameConfig.MOUNT
-                hor, hoc = cells.pop()
-                grid[hor][hoc] = GameConfig.HOLE
-                
+        if self.alg_name == "Partial-Obs":
+            # 1. Layout cố định 2 Núi băng và 1 Hố băng cho cả 4 ma trận
+            cells = [(r, c) for r in range(4) for c in range(4)]
+            random.shuffle(cells)
+            
+            rel_m1 = cells.pop()
+            rel_m2 = cells.pop()
+            rel_ho = cells.pop()
+            
+            for qr in range(2):
+                for qc in range(2):
+                    ro, co = qr * 4, qc * 4
+                    
+                    # Đặt các vật thể nhìn thấy (cố định vị trí tương đối)
+                    grid[ro + rel_m1[0]][co + rel_m1[1]] = GameConfig.MOUNT
+                    grid[ro + rel_m2[0]][co + rel_m2[1]] = GameConfig.MOUNT
+                    grid[ro + rel_ho[0]][co + rel_ho[1]] = GameConfig.HOLE
+                    
+                    self.known_obstacles.add((ro + rel_m1[0], co + rel_m1[1]))
+                    self.known_obstacles.add((ro + rel_m2[0], co + rel_m2[1]))
+                    self.known_obstacles.add((ro + rel_ho[0], co + rel_ho[1]))
+                    
+                    # Santa và House ngẫu nhiên độc lập
+                    quad_cells = [(r, c) for r in range(4) for c in range(4) 
+                                  if (r, c) not in (rel_m1, rel_m2, rel_ho)]
+                    random.shuffle(quad_cells)
+                    
+                    sr, sc = quad_cells.pop()
+                    self.santa_pos_list.append((ro + sr, co + sc))
+                    
+                    hr, hc = quad_cells.pop()
+                    grid[ro + hr][co + hc] = GameConfig.HOUSE
+                    if qr == 0 and qc == 0:
+                        self.house_pos = (ro + hr, co + hc)
+                        
+                    # Thêm các vật cản ngẫu nhiên KHÔNG nhìn thấy (không lưu vào known_obstacles)
+                    unseen_m = quad_cells.pop()
+                    grid[ro + unseen_m[0]][co + unseen_m[1]] = GameConfig.MOUNT
+                    
+                    unseen_ho = quad_cells.pop()
+                    grid[ro + unseen_ho[0]][co + unseen_ho[1]] = GameConfig.HOLE
+                        
+            self.log = [f"[MAP] Tạo 4 Belief States (Partial-Obs) ({GameConfig.GRID}x{GameConfig.GRID})"]
+        else:
+            # Sensorless / AND-OR: Random hoàn toàn như cũ
+            for qr in range(2):
+                for qc in range(2):
+                    ro, co = qr * 4, qc * 4
+                    cells = [(ro+r, co+c) for r in range(4) for c in range(4)]
+                    random.shuffle(cells)
+                    
+                    sr, sc = cells.pop()
+                    self.santa_pos_list.append((sr, sc))
+                    
+                    hr, hc = cells.pop()
+                    grid[hr][hc] = GameConfig.HOUSE
+                    if qr == 0 and qc == 0:
+                        self.house_pos = (hr, hc)
+                        
+                    mr, mc = cells.pop()
+                    grid[mr][mc] = GameConfig.MOUNT
+                    
+                    hor, hoc = cells.pop()
+                    grid[hor][hoc] = GameConfig.HOLE
+                    
+            self.log = [f"[MAP] Tạo 4 Belief States Random ({GameConfig.GRID}x{GameConfig.GRID})"]
+            
         self.grid = grid
         self.santa_start = self.santa_pos_list[0]
-        self.house_pos = (0, 0)
         self.satan_pos = None
         self.is_santa_turn = True
-        self.log = [f"[MAP] Tạo 4 Belief States ({GameConfig.GRID}x{GameConfig.GRID})"]
 
     def _apply_assignment(self, res, relocate_santa=True):
         if not res or len(res) < 18:
             return False
+        self.known_obstacles = set()  # Reset known obstacles cho các map thường
         items = ["Santa", "House"] + ["Hole"] * 10 + ["Mount"] * 6
         grid = [[GameConfig.SNOW] * GameConfig.GRID for _ in range(GameConfig.GRID)]
         s_pos = h_pos = None
@@ -159,8 +226,12 @@ class FrozenLakeGame:
         self.is_santa_turn = True
         return True
 
-    # -- Xây UI --------------------------------------------------------------
+    # -- UI Construction -----------------------------------------------------
     def _build_ui(self):
+        """
+        Khởi tạo các nút bấm cho Giao diện người dùng.
+        Thiết lập các tab nhóm thuật toán, nút chọn thuật toán và nút điều khiển.
+        """
         px = GameConfig.GRID * GameConfig.CELL + 12
         self.tabs = {}
         tab_names = ["1.Uninf", "2.Infor", "3.Local", "4.Complex", "5.CSP", "6.Advers"]
@@ -187,8 +258,12 @@ class FrozenLakeGame:
             self.alg_name = algs[0]
             self.btns_alg[self.alg_name].active = True
 
-    # -- Reset ----------------------------------------------------------------
+    # -- Reset State ----------------------------------------------------------
     def _reset_run(self):
+        """
+        Đặt lại trạng thái của lần chạy hiện tại.
+        Xóa đường đi, vị trí và các thống kê để bắt đầu thực thi mới.
+        """
         self.state = GameState.IDLE
         self.santa_pos = self.santa_start
         self.is_santa_turn = True
@@ -277,8 +352,12 @@ class FrozenLakeGame:
             self.state = GameState.DONE
             return False
 
-    # -- Chạy thuật toán ------------------------------------------------------
+    # -- Algorithm Execution --------------------------------------------------
     def run_algorithm(self):
+        """
+        Chuẩn bị và thực thi thuật toán tìm kiếm đã được chọn.
+        Xử lý các nhóm thuật toán khác nhau và ghi log kết quả.
+        """
         if self.group == 5:
             self.state = GameState.CSP_GEN
             self.csp_generator = ALGORITHMS[self.group][self.alg_name]()
@@ -444,7 +523,7 @@ class FrozenLakeGame:
             else:
                 from algorithms.complex import _transition_belief, SensorlessSearch
                 
-                if SensorlessSearch._is_goal(frozenset(self.current_santas), self.grid):
+                if SensorlessSearch._is_goal(self.grid, frozenset(self.current_santas)):
                     self._finish_game()
                     return
 
@@ -459,10 +538,10 @@ class FrozenLakeGame:
                     if self.grid[r][c] == GameConfig.HOUSE:
                         new_santas.append((r, c))
                     elif self.grid[r][c] == GameConfig.HOLE:
-                        outcomes = _transition_belief(self.grid, r, c, a)
+                        outcomes = _transition_belief(self.grid, r, c, a, block_holes=(self.alg_name == "Partial-Obs"))
                         new_santas.append(random.choice(outcomes) if outcomes else (r, c))
                     else:
-                        outcomes = _transition_belief(self.grid, r, c, a)
+                        outcomes = _transition_belief(self.grid, r, c, a, block_holes=(self.alg_name == "Partial-Obs"))
                         new_santas.append(outcomes[0] if outcomes else (r, c))
                         
                 self.current_santas = new_santas
@@ -586,7 +665,7 @@ class FrozenLakeGame:
             # Group 4 Complex:
             #   Sensorless / Partial-Obs → vẽ belief state overlay
             #   AND-OR                   → vẽ policy arrows
-            if self.group == 4 and self.belief_state and self.alg_name != "AND-OR":
+            if self.group == 4 and self.belief_state and self.alg_name == "Sensorless":
                 bsurf = pygame.Surface(
                     (GameConfig.GRID * GameConfig.CELL, GameConfig.GRID * GameConfig.CELL),
                     pygame.SRCALPHA
@@ -695,6 +774,12 @@ class FrozenLakeGame:
                     draw_mount_tile(self.screen, x, y)
                 elif t == GameConfig.HOUSE:
                     draw_house_tile(self.screen, x, y)
+                
+                # Tô màu xanh ngọc (cyan) cho các chướng ngại vật đã "nhìn thấy" (Partial-Obs)
+                if hasattr(self, 'known_obstacles') and (r, c) in self.known_obstacles:
+                    s = pygame.Surface((GameConfig.CELL, GameConfig.CELL), pygame.SRCALPHA)
+                    s.fill((0, 200, 255, 60))
+                    self.screen.blit(s, (x, y))
 
     def _draw_santa(self):
         if self.group == 4 and self.alg_name != "AND-OR" and hasattr(self, 'current_santas') and self.current_santas:

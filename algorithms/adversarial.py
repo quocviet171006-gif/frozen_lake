@@ -19,10 +19,18 @@ ACTIONS = ["Up", "Down", "Left", "Right"]
 ACT_DELTA = {"Up": (-1, 0), "Down": (1, 0), "Left": (0, -1), "Right": (0, 1)}
 
 class AdversarialSearch:
+    """
+    Chứa các thuật toán Tìm kiếm đối kháng (Minimax, Alpha-Beta Pruning, Expectimax).
+    Mô phỏng một trò chơi theo lượt giữa Santa (MAX) và Satan (MIN).
+    """
 
     @staticmethod
     def get_valid_moves(grid, pos):
-        """Trả về danh sách các ô có thể đi tới từ pos (không đi vào NÚI và HỐ)."""
+        """
+        Trả về danh sách các ô kề hợp lệ có thể di chuyển tới.
+        Tác nhân không thể di chuyển vào ô NÚI (MOUNT) hoặc HỐ (HOLE).
+        Nếu bị kẹt, tác nhân có thể chọn đứng yên.
+        """
         r, c = pos
         moves = []
         for act in ACTIONS:
@@ -31,7 +39,7 @@ class AdversarialSearch:
             if 0 <= nr < GameConfig.GRID and 0 <= nc < GameConfig.GRID:
                 if grid[nr][nc] not in (GameConfig.MOUNT, GameConfig.HOLE):
                     moves.append((nr, nc))
-        # Nếu bị kẹt, có thể đứng yên
+        # If stuck, staying in place is the only valid move
         if not moves:
             moves.append(pos)
         return moves
@@ -58,28 +66,33 @@ class AdversarialSearch:
 
     @staticmethod
     def evaluate(santa_pos, satan_pos, house_pos, d, bfs_dist, visited_cells):
+        """
+        Hàm đánh giá heuristic cho trạng thái trò chơi đối kháng.
+        Điểm dương có lợi cho Santa (MAX), điểm âm có lợi cho Satan (MIN).
+        Xem xét khoảng cách đến đích, khoảng cách đến Satan và phạt nếu lặp lại đường đi.
+        """
         if santa_pos == house_pos:
-            return 1.0 + (d * 0.01)
+            return 1.0 + (d * 0.01) # Thắng nhanh hơn thì tốt hơn
         if santa_pos == satan_pos:
-            return -1.0 - (d * 0.01)
-        
-        # Khoảng cách thực tế (BFS) tới nhà, nếu kẹt thì coi như rất xa
+            return -1.0 - (d * 0.01) # Thua chậm hơn thì tốt hơn
+            
+        # Khoảng cách BFS tới nhà; nếu không thể tới, coi như rất xa (1000)
         dist_to_house = bfs_dist.get(santa_pos, 1000)
         
-        # Khoảng cách Manhattan tới Satan (Satan không cần BFS vì nó chỉ cần tránh né cục bộ)
+        # Khoảng cách Manhattan tới Satan (Satan chỉ cần tránh né cục bộ, không cần BFS)
         dist_to_satan = abs(santa_pos[0] - satan_pos[0]) + abs(santa_pos[1] - satan_pos[1])
         
-        # Penalty nếu Santa đi vào ô đã đi qua rồi (tránh lặp vô hạn)
+        # Phạt nếu đi lại các ô cũ (tránh lặp vô hạn)
         penalty = 0
         if visited_cells:
             count = visited_cells.count(santa_pos)
-            penalty = count * 0.1  # Trừ điểm rất nặng nếu đi vào ô cũ
-        
-        # Công thức: Gần nhà thì tốt (-dist_to_house), Xa satan thì tốt (+dist_to_satan)
-        # Hệ số house lớn hơn để ưu tiên đi tới nhà thay vì chỉ chạy trốn Satan mãi
+            penalty = count * 0.1  
+            
+        # Công thức: Gần nhà hơn thì tốt (-), xa Satan hơn thì tốt (+)
+        # Trọng số ưu tiên việc di chuyển tới nhà hơn là chỉ chạy trốn
         eval_score = (dist_to_satan * 0.5 - dist_to_house * 2.0) / 100.0 - penalty
         
-        # Đảm bảo điểm số nằm trong khoảng (-1, 1) để không lẫn lộn với điểm Thắng/Thua
+        # Giới hạn điểm trong khoảng (-1, 1) để không ghi đè lên giá trị Thắng/Thua tuyệt đối
         return max(-0.99, min(0.99, eval_score))
 
     @staticmethod
