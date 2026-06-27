@@ -181,10 +181,10 @@ python main.py
 - **Greedy Search**
 > ![GS](images/GS.gif)
 
-- **Asao**
+- **A\***
 > ![Asao](images/Asao.gif)
 
-- **IDAsao**
+- **IDA\***
 > ![IDAsao](images/IDAsao.gif)
 
 ---
