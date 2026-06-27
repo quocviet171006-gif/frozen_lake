@@ -128,46 +128,41 @@ class InformedSearch:
         return [], visit_order
 
     @staticmethod
+    @staticmethod
     def ida_star(grid, start_state, goal_pos, *args):
-        """
-        Tìm kiếm A* sâu dần (Iterative Deepening A* - IDA*)
-        Kết hợp hiệu quả về bộ nhớ của DFS với tính tối ưu của A*.
-        Sử dụng tìm kiếm theo chiều sâu nhưng bị giới hạn bởi một ngưỡng chi phí f (f-cost threshold).
-        """
         visit_order = []
         root = Node(start_state)
         root.g = 0
         threshold = Environment.heuristic(start_state, goal_pos)
-        
+
         while True:
-            frontier = [root]
+            frontier = [(root, frozenset([start_state]))]  # (node, path_set)
             next_threshold = float('inf')
-            
+
             while frontier:
-                node = frontier.pop()  # LIFO - get deepest node
-                
+                node, path_set = frontier.pop()
+
                 if node.state == goal_pos:
                     visit_order.append(node.state)
                     return reconstruct(node), visit_order
-                    
+
                 visit_order.append(node.state)
-                
+
                 for n_state, cost, action in Environment.get_cost_transitions(grid, node.state, goal_pos):
+                    if n_state in path_set:          # O(1) thay vì O(depth)
+                        continue
+
                     child = Node(n_state, node, action=action)
                     child.g = node.g + cost
-                    
-                    # f = g(child) + h(child)
                     f = child.g + Environment.heuristic(n_state, goal_pos)
                     child.cost = f
-                    
+
                     if f <= threshold:
-                        frontier.append(child)
+                        frontier.append((child, path_set | {n_state}))
                     else:
                         next_threshold = min(next_threshold, f)
-                        
-            # If no node exceeded the threshold, or graph fully explored but no goal -> fail
+
             if next_threshold == float('inf'):
                 return [], visit_order
-                
-            # Increase threshold for the next iteration
+
             threshold = next_threshold

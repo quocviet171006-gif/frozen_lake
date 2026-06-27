@@ -30,4 +30,3 @@ ALGORITHMS = {
         "Expectimax": AdversarialSearch.expectimax
     }
 }
-
