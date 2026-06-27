@@ -9,7 +9,8 @@ Mô hình chung tạo bản đồ CSP:
   
   Ràng buộc (Constraints):
     - Đúng 1 ô SANTA_HOUSE
-    - Tối đa 10 Hố (HOLE), tối đa 6 Núi (MOUNT)
+    - Đúng 10 Hố (HOLE), đúng 6 Núi (MOUNT)
+    - Các biến đặc biệt không được trùng nhau và phải đúng số lượng
     - Hố không được nằm kề SANTA_HOUSE (ràng buộc an toàn)
     - Phải có đường đi hợp lệ từ Santa đến Nhà (sau khi gán xong)
 
@@ -70,14 +71,112 @@ class CSPGenerator:
         ]
 
     @staticmethod
+    def _has_path(assignment):
+        """Return True if Santa can reach the house without crossing holes or mounts."""
+        santa_pos = next((c for c, v in assignment.items() if v == SANTA), None)
+        house_pos = next((c for c, v in assignment.items() if v == SANTA_HOUSE), None)
+        if santa_pos is None or house_pos is None:
+            return False
+
+        blocked = {HOLE, MOUNT}
+        queue = deque([santa_pos])
+        visited = {santa_pos}
+
+        while queue:
+            cell = queue.popleft()
+            if cell == house_pos:
+                return True
+
+            for nb in CSPGenerator._get_neighbors(cell):
+                if nb in visited:
+                    continue
+                if assignment.get(nb, FROZEN) in blocked:
+                    continue
+                visited.add(nb)
+                queue.append(nb)
+
+        return False
+
+    @staticmethod
+    def _holes_not_adjacent_house(assignment):
+        house_pos = next((c for c, v in assignment.items() if v == SANTA_HOUSE), None)
+        if house_pos is None:
+            return True
+        return all(assignment.get(nb) != HOLE for nb in CSPGenerator._get_neighbors(house_pos))
+
+    @staticmethod
+    def _values_for_step(values, assigned_count):
+        """During obstacle placement, reserve Santa and House for the final step."""
+        allowed = {FROZEN, HOLE, MOUNT}
+        return [value for value in values if value in allowed]
+
+    @staticmethod
+    def _counts_feasible(assignment):
+        """Prune branches that can no longer reach exact tile counts."""
+        total = GameConfig.GRID * GameConfig.GRID
+        remaining_slots = total - len(assignment)
+        obstacle_slots_left = max(0, remaining_slots - 2)
+
+        hole_count = sum(1 for value in assignment.values() if value == HOLE)
+        mount_count = sum(1 for value in assignment.values() if value == MOUNT)
+        santa_count = sum(1 for value in assignment.values() if value == SANTA)
+        house_count = sum(1 for value in assignment.values() if value == SANTA_HOUSE)
+
+        if hole_count > MAX_HOLES or mount_count > MAX_MOUNTS:
+            return False
+        if santa_count > 1 or house_count > 1:
+            return False
+        if hole_count + obstacle_slots_left < MAX_HOLES:
+            return False
+        if mount_count + obstacle_slots_left < MAX_MOUNTS:
+            return False
+        return True
+
+    @staticmethod
+    def _obstacles_complete(assignment):
+        return (
+            sum(1 for value in assignment.values() if value == HOLE) == MAX_HOLES
+            and sum(1 for value in assignment.values() if value == MOUNT) == MAX_MOUNTS
+            and sum(1 for value in assignment.values() if value == SANTA) == 0
+            and sum(1 for value in assignment.values() if value == SANTA_HOUSE) == 0
+        )
+
+    @staticmethod
+    def _finish_with_santa_house(assignment):
+        """Place Santa penultimately and House last on reachable snow cells."""
+        base = dict(assignment)
+        for r in range(GameConfig.GRID):
+            for c in range(GameConfig.GRID):
+                base.setdefault((r, c), FROZEN)
+
+        snow_cells = [cell for cell, value in base.items() if value == FROZEN]
+        random.shuffle(snow_cells)
+
+        for santa_cell in snow_cells:
+            with_santa = dict(base)
+            with_santa[santa_cell] = SANTA
+            yield dict(with_santa)
+
+            house_cells = [cell for cell in snow_cells if cell != santa_cell]
+            random.shuffle(house_cells)
+            for house_cell in house_cells:
+                candidate = dict(with_santa)
+                candidate[house_cell] = SANTA_HOUSE
+                if not CSPGenerator._holes_not_adjacent_house(candidate):
+                    continue
+                if CSPGenerator._assignment_complete(candidate):
+                    yield candidate
+                    return
+
+    @staticmethod
     def _is_consistent(cell, value, assignment):
         """
         Kiểm tra tính nhất quán khi gán value cho cell.
         - Đúng 1 SANTA_HOUSE (Ngôi nhà) trong toàn bộ grid
         - Đúng 1 SANTA (vị trí Santa) trong toàn bộ grid
         - Tối đa MAX_HOLES HOLE và MAX_MOUNTS MOUNT
-        - HOLE không kề SANTA_HOUSE
-        - SANTA không đứng cùng ô SANTA_HOUSE, HOLE, MOUNT
+        - Các giá trị đặc biệt không được xuất hiện quá số lượng cho phép.
+        - HOLE không được kề SANTA_HOUSE.
         """
         santa_house_count = sum(1 for v in assignment.values() if v == SANTA_HOUSE)
         santa_count       = sum(1 for v in assignment.values() if v == SANTA)
@@ -93,23 +192,14 @@ class CSPGenerator:
         if value == MOUNT and mount_count >= MAX_MOUNTS:
             return False
 
-        # Lấy vị trí hiện tại của các ô đặc biệt
-        existing_santa_house = next((c for c, v in assignment.items() if v == SANTA_HOUSE), None)
-        existing_santa       = next((c for c, v in assignment.items() if v == SANTA), None)
-
-        # SANTA không được đứng trùng Ngôi nhà (cũng không được kề Hố để an toàn)
-        if value == SANTA and existing_santa_house == cell:
-            return False
-        if value == SANTA_HOUSE and existing_santa == cell:
-            return False
-
         for nb in CSPGenerator._get_neighbors(cell):
-            if nb in assignment:
-                nb_val = assignment[nb]
-                if value == HOLE and nb_val == SANTA_HOUSE:
-                    return False
-                if value == SANTA_HOUSE and nb_val == HOLE:
-                    return False
+            if nb not in assignment:
+                continue
+            nb_val = assignment[nb]
+            if value == HOLE and nb_val == SANTA_HOUSE:
+                return False
+            if value == SANTA_HOUSE and nb_val == HOLE:
+                return False
 
         return True
 
@@ -125,7 +215,16 @@ class CSPGenerator:
             return False
         santa_house_count = sum(1 for v in assignment.values() if v == SANTA_HOUSE)
         santa_count       = sum(1 for v in assignment.values() if v == SANTA)
-        return santa_house_count == 1 and santa_count == 1
+        hole_count        = sum(1 for v in assignment.values() if v == HOLE)
+        mount_count       = sum(1 for v in assignment.values() if v == MOUNT)
+        return (
+            santa_house_count == 1
+            and santa_count == 1
+            and hole_count == MAX_HOLES
+            and mount_count == MAX_MOUNTS
+            and CSPGenerator._holes_not_adjacent_house(assignment)
+            and CSPGenerator._has_path(assignment)
+        )
 
     @staticmethod
     def _select_unassigned_variable(variables, assignment, domains):
@@ -169,24 +268,7 @@ class CSPGenerator:
         for i, m in enumerate(mounts[:MAX_MOUNTS]):
             result[12 + i] = m
 
-        # Pad thiếu hole / mount bằng ô FROZEN chưa dùng
-        used   = set(result.values())
-        unused = [
-            r * GameConfig.GRID + c
-            for r in range(GameConfig.GRID)
-            for c in range(GameConfig.GRID)
-            if r * GameConfig.GRID + c not in used
-        ]
-        random.shuffle(unused)
-        idx = 0
-        for i in range(2, 12):
-            if i not in result and idx < len(unused):
-                result[i] = unused[idx]; idx += 1
-        for i in range(12, 18):
-            if i not in result and idx < len(unused):
-                result[i] = unused[idx]; idx += 1
-
-        return result if len(result) >= 18 else None
+        return result
 
 
     # ═══════════════════════════════════════════════════════════════════════════
@@ -211,6 +293,10 @@ class CSPGenerator:
                 yield dict(assignment)
                 return
 
+            if CSPGenerator._obstacles_complete(assignment):
+                yield from CSPGenerator._finish_with_santa_house(assignment)
+                return
+
             # SELECT-UNASSIGNED-VARIABLE (MRV)
             cell = CSPGenerator._select_unassigned_variable(variables, assignment, doms)
             if cell is None:
@@ -219,6 +305,7 @@ class CSPGenerator:
             # ORDER-DOMAIN-VALUES (random order)
             vals = doms[cell][:]
             random.shuffle(vals)
+            vals = CSPGenerator._values_for_step(vals, len(assignment))
 
             for value in vals:
                 # Consistent check
@@ -226,35 +313,14 @@ class CSPGenerator:
                     continue
 
                 assignment[cell] = value
+                if not CSPGenerator._counts_feasible(assignment):
+                    del assignment[cell]
+                    continue
                 saved = {k: v[:] for k, v in doms.items()}   # save domains
 
-                # ── FORWARD CHECKING ──────────────────────────────
-                fc_ok = True
-                for nb in CSPGenerator._get_neighbors(cell):
-                    if nb in assignment:
-                        continue
-                    # Xóa giá trị vi phạm constraint với (cell, value)
-                    if value == HOLE:
-                        doms[nb] = [v for v in doms[nb] if v != SANTA_HOUSE]
-                    if value == SANTA_HOUSE:
-                        doms[nb] = [v for v in doms[nb] if v != HOLE]
-                    if not doms[nb]:   # domain rỗng → prune
-                        fc_ok = False
-                        break
-
-                # Tính nhất quán toàn cục: SANTA_HOUSE chỉ xuất hiện 1 lần
-                if fc_ok and value == SANTA_HOUSE:
-                    for other in variables:
-                        if other not in assignment and other != cell:
-                            doms[other] = [v for v in doms[other] if v != SANTA_HOUSE]
-                            if not doms[other]:
-                                fc_ok = False
-                                break
-
-                if fc_ok:
-                    yield from fc_backtrack(assignment, doms)
-                    if CSPGenerator._assignment_complete(assignment):
-                        return
+                yield from fc_backtrack(assignment, doms)
+                if CSPGenerator._assignment_complete(assignment):
+                    return
 
                 # Restore domains + remove assignment
                 for k in saved:
@@ -275,8 +341,7 @@ class CSPGenerator:
         Bước 1: Chạy AC-3 để buộc tính nhất quán cung (arc consistency) và thu hẹp miền giá trị.
         Bước 2: Chạy quay lui trên các miền giá trị đã được thu hẹp.
 
-        Ràng buộc giữa các ô lân cận:
-          - (HOLE, SANTA_HOUSE) và (SANTA_HOUSE, HOLE) là không nhất quán.
+        Ràng buộc chính: đúng số lượng, không trùng biến, hố không kề nhà, và map cuối có đường đi.
         """
         variables, domains = CSPGenerator._build_csp()
         random.shuffle(variables)
@@ -350,6 +415,10 @@ class CSPGenerator:
                 yield dict(assignment)
                 return
 
+            if CSPGenerator._obstacles_complete(assignment):
+                yield from CSPGenerator._finish_with_santa_house(assignment)
+                return
+
             # SELECT-UNASSIGNED-VARIABLE (MRV)
             cell = CSPGenerator._select_unassigned_variable(variables, assignment, doms)
             if cell is None:
@@ -357,39 +426,21 @@ class CSPGenerator:
 
             vals = doms[cell][:]
             random.shuffle(vals)
+            vals = CSPGenerator._values_for_step(vals, len(assignment))
 
             for value in vals:
                 if not CSPGenerator._is_consistent(cell, value, assignment):
                     continue
 
                 assignment[cell] = value
+                if not CSPGenerator._counts_feasible(assignment):
+                    del assignment[cell]
+                    continue
                 saved = {k: v[:] for k, v in doms.items()}
 
-                # Forward Checking nhẹ (kế thừa tinh thần AC-3)
-                fc_ok = True
-                for nb in CSPGenerator._get_neighbors(cell):
-                    if nb in assignment:
-                        continue
-                    if value == HOLE:
-                        doms[nb] = [v for v in doms[nb] if v != SANTA_HOUSE]
-                    if value == SANTA_HOUSE:
-                        doms[nb] = [v for v in doms[nb] if v != HOLE]
-                    if not doms[nb]:
-                        fc_ok = False
-                        break
-
-                if fc_ok and value == SANTA_HOUSE:
-                    for other in variables:
-                        if other not in assignment and other != cell:
-                            doms[other] = [v for v in doms[other] if v != SANTA_HOUSE]
-                            if not doms[other]:
-                                fc_ok = False
-                                break
-
-                if fc_ok:
-                    yield from backtrack(assignment, doms)
-                    if CSPGenerator._assignment_complete(assignment):
-                        return
+                yield from backtrack(assignment, doms)
+                if CSPGenerator._assignment_complete(assignment):
+                    return
 
                 for k in saved:
                     doms[k] = saved[k]
@@ -446,18 +497,18 @@ class CSPGenerator:
             Đếm số constraint bị vi phạm khi gán value cho cell,
             với phần còn lại giữ nguyên assignment.
             """
+            trial = dict(assignment)
+            trial[cell] = value
             conflicts = 0
-            for nb in CSPGenerator._get_neighbors(cell):
-                nb_val = assignment.get(nb, FROZEN)
-                if value == HOLE and nb_val == SANTA_HOUSE:
-                    conflicts += 1
-                if value == SANTA_HOUSE and nb_val == HOLE:
-                    conflicts += 1
-            # Santa không được đứng trùng Ngôi nhà
-            if value == SANTA:
-                house_pos = next((c for c, v in assignment.items() if v == SANTA_HOUSE and c != cell), None)
-                if house_pos == cell:
-                    conflicts += 1
+
+            if value == HOLE:
+                conflicts += sum(1 for nb in CSPGenerator._get_neighbors(cell) if trial.get(nb) == SANTA_HOUSE)
+            if value == SANTA_HOUSE:
+                conflicts += sum(1 for nb in CSPGenerator._get_neighbors(cell) if trial.get(nb) == HOLE)
+
+            if value in (SANTA, SANTA_HOUSE) and not CSPGenerator._has_path(trial):
+                conflicts += 1
+
             return conflicts
 
         def get_conflicted_cells(assignment):
@@ -475,8 +526,14 @@ class CSPGenerator:
                 return False
             if sum(1 for v in assignment.values() if v == SANTA) != 1:
                 return False
-            # Không có conflict
-            return len(get_conflicted_cells(assignment)) == 0
+            if sum(1 for v in assignment.values() if v == HOLE) != MAX_HOLES:
+                return False
+            if sum(1 for v in assignment.values() if v == MOUNT) != MAX_MOUNTS:
+                return False
+            if not CSPGenerator._holes_not_adjacent_house(assignment):
+                return False
+            # Không có conflict và Santa phải đi được tới nhà
+            return len(get_conflicted_cells(assignment)) == 0 and CSPGenerator._has_path(assignment)
 
         # ── Khởi tạo ─────────────────────────────────────────────────────────
         current = make_initial()
@@ -490,11 +547,23 @@ class CSPGenerator:
                 yield dict(current)
                 return
 
+            if not CSPGenerator._has_path(current):
+                special = random.choice([SANTA, SANTA_HOUSE])
+                old_cell = next((c for c, v in current.items() if v == special), None)
+                free_cells = [c for c, v in current.items() if v == FROZEN]
+                if old_cell is not None and free_cells:
+                    new_cell = random.choice(free_cells)
+                    current[old_cell] = FROZEN
+                    current[new_cell] = special
+                    yield dict(current)
+                    continue
+
             # var ← randomly chosen CONFLICTED variable
             conflicted = get_conflicted_cells(current)
             if not conflicted:
+                current = make_initial()
                 yield dict(current)
-                return
+                continue
 
             var = random.choice(conflicted)
 

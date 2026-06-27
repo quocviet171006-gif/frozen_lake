@@ -361,6 +361,7 @@ class FrozenLakeGame:
         if self.group == 5:
             self.state = GameState.CSP_GEN
             self.csp_generator = ALGORITHMS[self.group][self.alg_name]()
+            self.csp_steps_seen = 0
             self.log = [f"Generating map using {self.alg_name}"]
             return
 
@@ -485,12 +486,23 @@ class FrozenLakeGame:
         if self.state == GameState.CSP_GEN:
             try:
                 self.csp_assignment = next(self.csp_generator)
+                self.csp_steps_seen = getattr(self, "csp_steps_seen", 0) + 1
+                if CSPGenerator._assignment_complete(self.csp_assignment):
+                    formatted = CSPGenerator._to_game_format(self.csp_assignment)
+                    if self._apply_assignment(formatted, relocate_santa=False):
+                        self.log.append("[OK] CSP Map Generated successfully.")
+                    else:
+                        self.log.append("[ERR] CSP Map Gen Failed!")
+                    self._reset_run()
             except StopIteration:
-                formatted = CSPGenerator._to_game_format(self.csp_assignment)
-                if self._apply_assignment(formatted, relocate_santa=False):
-                    self.log.append("[OK] CSP Map Generated successfully.")
+                if CSPGenerator._assignment_complete(self.csp_assignment):
+                    formatted = CSPGenerator._to_game_format(self.csp_assignment)
+                    if self._apply_assignment(formatted, relocate_santa=False):
+                        self.log.append("[OK] CSP Map Generated successfully.")
+                    else:
+                        self.log.append("[ERR] CSP Map Gen Failed!")
                 else:
-                    self.log.append("[ERR] CSP Map Gen Failed!")
+                    self.log.append("[ERR] CSP stopped before finding a valid map!")
                 self._reset_run()
             return
 
@@ -714,10 +726,11 @@ class FrozenLakeGame:
                 # key = (r, c), val = tile type (FROZEN/HOLE/MOUNT/SANTA_HOUSE)
                 r, c = key
                 x, y = c * GameConfig.CELL, r * GameConfig.CELL
-                from algorithms.csp import SANTA_HOUSE, HOLE, MOUNT
+                from algorithms.csp import SANTA, SANTA_HOUSE, HOLE, MOUNT
                 if val == SANTA_HOUSE:
-                    draw_santa(self.screen, x, y)
                     draw_house_tile(self.screen, x, y)
+                elif val == SANTA:
+                    draw_santa(self.screen, x, y)
                 elif val == HOLE:
                     draw_hole_tile(self.screen, x, y)
                 elif val == MOUNT:
@@ -967,7 +980,14 @@ class FrozenLakeGame:
 
             if self.state in [GameState.RUNNING, GameState.CSP_GEN]:
                 self.anim_timer += dt
-                speed = 100 if self.state == GameState.CSP_GEN else self.anim_speed
+                if self.state == GameState.CSP_GEN:
+                    if self.alg_name == "Min-Conflicts":
+                        steps_seen = getattr(self, "csp_steps_seen", 0)
+                        speed = 100 if steps_seen == 0 else (3000 if steps_seen == 1 else 850)
+                    else:
+                        speed = 100
+                else:
+                    speed = self.anim_speed
                 if self.anim_timer >= speed:
                     self.anim_timer = 0
                     self._advance_step()

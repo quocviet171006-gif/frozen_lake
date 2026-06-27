@@ -208,6 +208,7 @@ Nhóm CSP **không tìm đường đi** mà **sinh bản đồ** thỏa mãn rà
 - Tối đa 10 hố, tối đa 6 núi
 - Hố không kề ngôi nhà
 - Luôn có đường đi từ Santa đến nhà
+- Mỗi biến không được đặt quá 1 giá trị
 
 | Thuật toán | Mô tả |
 |---|---|
