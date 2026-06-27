@@ -1,7 +1,7 @@
 # 🎅 Frozen Lake AI
 
 <p align="center">
-  <img src="images/demo_main.gif" alt="Frozen Lake Demo" width="700"/>
+  <img src="images/demo_main.png" alt="Frozen Lake Demo" width="700"/>
 </p>
 
 <p align="center">
@@ -55,12 +55,12 @@ Trò chơi mô phỏng Santa Claus di chuyển trên hồ băng 8×8 để đế
 
 | Nhóm | Demo |
 |---|---|
-| 1 · Uninformed (Breadth-First Search / Depth-First Search / Uniform Cost Search) | ![Uninformed](images/demo_uninformed.gif) |
-| 2 · Informed (Greedy Search/ A\* Search / Iterative Deepening A\* Search) | ![Informed](images/demo_informed.gif) |
-| 3 · Local (Simple Hill Climbing / Local Beam Search / Simulated Annealing) | ![Local](images/demo_local.gif) |
-| 4 · Complex (Sensorless / Partial-Observation / AND-OR Graph Search) | ![Complex](images/demo_complex.gif) |
-| 5 · CSP (Forward Checking / AC-3 / Min-Conflicts) | ![CSP](images/demo_csp.gif) |
-| 6 · Adversarial (Minimax / Alpha-Beta / Expectimax) | ![Adversarial](images/demo_adversarial.gif) |
+| 1 · Uninformed (Breadth-First Search / Depth-First Search / Uniform Cost Search) |
+| 2 · Informed (Greedy Search/ A\* Search / Iterative Deepening A\* Search) |
+| 3 · Local (Simple Hill Climbing / Local Beam Search / Simulated Annealing) |
+| 4 · Complex (Sensorless / Partial-Observation / AND-OR Graph Search) |
+| 5 · CSP (Forward Checking / AC-3 / Min-Conflicts) |
+| 6 · Adversarial (Minimax / Alpha-Beta / Expectimax) |
 
 ---
 
@@ -142,7 +142,7 @@ python main.py
 ### Nhóm 1 — Tìm kiếm không có thông tin (Uninformed Search)
 
 <p align="center">
-  <img src="images/demo_uninformed.gif" alt="Uninformed Search" width="600"/>
+  <img src="images/uninformed.png" alt="Uninformed Search" width="600"/>
 </p>
 
 | Thuật toán | Mô tả | Đặc điểm |
@@ -151,12 +151,16 @@ python main.py
 | **DFS** | Tìm kiếm theo chiều sâu | Tốn ít bộ nhớ, LIFO stack |
 | **UCS** | Tìm kiếm chi phí đồng nhất | Tối ưu theo cost, priority queue |
 
+#### Chạy mô phỏng thuật toán
+- BFS
+> ![bfs](images/bfs.gif)
+
 ---
 
 ### Nhóm 2 — Tìm kiếm có thông tin (Informed Search)
 
 <p align="center">
-  <img src="images/demo_informed.gif" alt="Informed Search" width="600"/>
+  <img src="images/informed.png" alt="Informed Search" width="600"/>
 </p>
 
 > **Heuristic**: Khoảng cách Manhattan `h(n) = |r - r_goal| + |c - c_goal|`
@@ -172,7 +176,7 @@ python main.py
 ### Nhóm 3 — Tìm kiếm cục bộ (Local Search)
 
 <p align="center">
-  <img src="images/demo_local.gif" alt="Local Search" width="600"/>
+  <img src="images/local.png" alt="Local Search" width="600"/>
 </p>
 
 | Thuật toán | Chiến lược | Tham số |
@@ -186,7 +190,7 @@ python main.py
 ### Nhóm 4 — Tìm kiếm trong môi trường phức tạp (Complex Environment Search)
 
 <p align="center">
-  <img src="images/demo_complex.gif" alt="Complex Search" width="600"/>
+  <img src="images/complex.png" alt="Complex Search" width="600"/>
 </p>
 
 | Thuật toán | Mô hình | Mô tả |
@@ -200,7 +204,7 @@ python main.py
 ### Nhóm 5 — Bài toán thỏa mãn ràng buộc (CSP)
 
 <p align="center">
-  <img src="images/demo_csp.gif" alt="CSP" width="600"/>
+  <img src="images/csp.png" alt="CSP" width="600"/>
 </p>
 
 Nhóm CSP **không tìm đường đi** mà **sinh bản đồ** thỏa mãn ràng buộc:
@@ -221,7 +225,7 @@ Nhóm CSP **không tìm đường đi** mà **sinh bản đồ** thỏa mãn rà
 ### Nhóm 6 — Tìm kiếm đối kháng (Adversarial Search)
 
 <p align="center">
-  <img src="images/demo_adversarial.gif" alt="Adversarial Search" width="600"/>
+  <img src="images/adversarial.png" alt="Adversarial Search" width="600"/>
 </p>
 
 Mô hình đối kháng trong Frozen Lake:
