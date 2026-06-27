@@ -541,17 +541,6 @@ class CSPGenerator:
                 yield dict(current)
                 return
 
-            if not CSPGenerator._has_path(current):
-                special = random.choice([SANTA, SANTA_HOUSE])
-                old_cell = next((c for c, v in current.items() if v == special), None)
-                free_cells = [c for c, v in current.items() if v == FROZEN]
-                if old_cell is not None and free_cells:
-                    new_cell = random.choice(free_cells)
-                    current[old_cell] = FROZEN
-                    current[new_cell] = special
-                    yield dict(current)
-                    continue
-
             # var ← randomly chosen CONFLICTED variable
             conflicted = get_conflicted_cells(current)
             if not conflicted:
@@ -559,51 +548,23 @@ class CSPGenerator:
                 yield dict(current)
                 continue
 
-            var = random.choice(conflicted)
-
-            # value ← value v that minimizes CONFLICTS(var, v, current, csp)
-            # Lấy domain đầy đủ và tìm giá trị min-conflict
-            santa_house_count = sum(1 for v in current.values() if v == SANTA_HOUSE)
-            santa_count_ex    = sum(1 for k, v in current.items() if v == SANTA and k != var)
-            hole_count  = sum(1 for k, v in current.items() if v == HOLE and k != var)
-            mount_count = sum(1 for k, v in current.items() if v == MOUNT and k != var)
-
-            # Xây domain hợp lệ cho var (tuân thủ ràng buộc đếm)
-            candidate_values = [FROZEN]
-            if hole_count  < MAX_HOLES:  candidate_values.append(HOLE)
-            if mount_count < MAX_MOUNTS: candidate_values.append(MOUNT)
-            # SANTA_HOUSE: chỉ được gán nếu hiện tại var đang giữ SANTA_HOUSE
-            # hoặc chưa có SANTA_HOUSE nào
-            if santa_house_count == 0 or current[var] == SANTA_HOUSE:
-                candidate_values.append(SANTA_HOUSE)
-            # SANTA: chỉ được gán nếu var đang giữ SANTA hoặc chưa có SANTA nào
-            if santa_count_ex == 0 or current[var] == SANTA:
-                candidate_values.append(SANTA)
-
-            # Chọn value minimizes conflicts
-            min_conf  = float('inf')
-            best_vals = []
-            for v in candidate_values:
-                # Tạm thời gán để đếm conflict
-                old = current[var]
-                current[var] = v
-                c = count_conflicts(var, v, current)
-                current[var] = old
-                if c < min_conf:
-                    min_conf  = c
-                    best_vals = [v]
-                elif c == min_conf:
-                    best_vals.append(v)
-
-            # set var = value in current
-            current[var] = random.choice(best_vals)
-
-            # yield mỗi bước để animate hiển thị quá trình sửa lỗi
+            # ── Xử lý conflict: di chuyển SANTA_HOUSE sang ô tuyết an toàn ──
+            house_pos = next((c for c, v in current.items() if v == SANTA_HOUSE), None)
+            if house_pos:
+                free_cells = [
+                    c for c, v in current.items()
+                    if v == FROZEN
+                    and all(current.get(nb) != HOLE for nb in CSPGenerator._get_neighbors(c))
+                ]
+                if free_cells:
+                    new_house = random.choice(free_cells)
+                    current[house_pos] = FROZEN
+                    current[new_house] = SANTA_HOUSE
             yield dict(current)
+            continue
 
         # return failure (hết max_steps)
         yield dict(current)
-
 
     # ── Alias giữ tương thích ngược ──────────────────────────────────────────
     @staticmethod
