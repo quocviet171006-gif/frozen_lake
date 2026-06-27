@@ -492,11 +492,6 @@ class CSPGenerator:
             return assignment
 
         def count_conflicts(cell, value, assignment):
-            """
-            CONFLICTS(var, value, current, csp):
-            Đếm số constraint bị vi phạm khi gán value cho cell,
-            với phần còn lại giữ nguyên assignment.
-            """
             trial = dict(assignment)
             trial[cell] = value
             conflicts = 0
@@ -506,7 +501,8 @@ class CSPGenerator:
             if value == SANTA_HOUSE:
                 conflicts += sum(1 for nb in CSPGenerator._get_neighbors(cell) if trial.get(nb) == HOLE)
 
-            if value in (SANTA, SANTA_HOUSE) and not CSPGenerator._has_path(trial):
+            # ✅ Sửa: check path cho TẤT CẢ các ô, không chỉ SANTA/SANTA_HOUSE
+            if not CSPGenerator._has_path(trial):
                 conflicts += 1
 
             return conflicts
@@ -520,8 +516,6 @@ class CSPGenerator:
             return conflicted
 
         def is_solution(assignment):
-            """Kiểm tra assignment là solution hợp lệ."""
-            # Đúng 1 SANTA_HOUSE và 1 SANTA
             if sum(1 for v in assignment.values() if v == SANTA_HOUSE) != 1:
                 return False
             if sum(1 for v in assignment.values() if v == SANTA) != 1:
@@ -532,8 +526,8 @@ class CSPGenerator:
                 return False
             if not CSPGenerator._holes_not_adjacent_house(assignment):
                 return False
-            # Không có conflict và Santa phải đi được tới nhà
-            return len(get_conflicted_cells(assignment)) == 0 and CSPGenerator._has_path(assignment)
+            # ✅ Chỉ cần check path một lần — không cần get_conflicted_cells
+            return CSPGenerator._has_path(assignment)
 
         # ── Khởi tạo ─────────────────────────────────────────────────────────
         current = make_initial()
