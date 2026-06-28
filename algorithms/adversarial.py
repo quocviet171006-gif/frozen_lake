@@ -37,7 +37,7 @@ class AdversarialSearch:
             dr, dc = ACT_DELTA[act]
             nr, nc = r + dr, c + dc
             if 0 <= nr < GameConfig.GRID and 0 <= nc < GameConfig.GRID:
-                if grid[nr][nc] not in (GameConfig.MOUNT, GameConfig.HOLE, GameConfig.HOUSE):
+                if grid[nr][nc] not in (GameConfig.MOUNT, GameConfig.HOLE):
                     moves.append((nr, nc))
         # If stuck, staying in place is the only valid move
         if not moves:
@@ -91,7 +91,7 @@ class AdversarialSearch:
         # Công thức: Gần nhà hơn thì tốt (-), xa Satan hơn thì tốt (+)
         # Trọng số ưu tiên việc di chuyển tới nhà hơn là chỉ chạy trốn
         eval_score = (dist_to_satan * 0.5 - dist_to_house * 2.0) / 100.0 - penalty
-        
+
         # Giới hạn điểm trong khoảng (-1, 1) để không ghi đè lên giá trị Thắng/Thua tuyệt đối
         return max(-0.99, min(0.99, eval_score))
 
