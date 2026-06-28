@@ -1,7 +1,7 @@
 # 🎅 Frozen Lake AI
 
 <p align="center">
-  <img src="images/demo_main.gif" alt="Frozen Lake Demo" width="700"/>
+  <img src="images/demo_main.png" alt="Frozen Lake Demo" width="700"/>
 </p>
 
 <p align="center">
@@ -55,12 +55,12 @@ Trò chơi mô phỏng Santa Claus di chuyển trên hồ băng 8×8 để đế
 
 | Nhóm | Demo |
 |---|---|
-| 1 · Uninformed (Breadth-First Search / Depth-First Search / Uniform Cost Search) | ![Uninformed](images/demo_uninformed.gif) |
-| 2 · Informed (Greedy Search/ A\* Search / Iterative Deepening A\* Search) | ![Informed](images/demo_informed.gif) |
-| 3 · Local (Simple Hill Climbing / Local Beam Search / Simulated Annealing) | ![Local](images/demo_local.gif) |
-| 4 · Complex (Sensorless / Partial-Observation / AND-OR Graph Search) | ![Complex](images/demo_complex.gif) |
-| 5 · CSP (Forward Checking / AC-3 / Min-Conflicts) | ![CSP](images/demo_csp.gif) |
-| 6 · Adversarial (Minimax / Alpha-Beta / Expectimax) | ![Adversarial](images/demo_adversarial.gif) |
+| 1 · Uninformed (Breadth-First Search / Depth-First Search / Uniform Cost Search) |
+| 2 · Informed (Greedy Search/ A\* Search / Iterative Deepening A\* Search) |
+| 3 · Local (Simple Hill Climbing / Local Beam Search / Simulated Annealing) |
+| 4 · Complex (Sensorless / Partial-Observation / AND-OR Graph Search) |
+| 5 · CSP (Forward Checking / AC-3 / Min-Conflicts) |
+| 6 · Adversarial (Minimax / Alpha-Beta / Expectimax) |
 
 ---
 
@@ -142,7 +142,7 @@ python main.py
 ### Nhóm 1 — Tìm kiếm không có thông tin (Uninformed Search)
 
 <p align="center">
-  <img src="images/demo_uninformed.gif" alt="Uninformed Search" width="600"/>
+  <img src="images/uninformed.png" alt="Uninformed Search" width="600"/>
 </p>
 
 | Thuật toán | Mô tả | Đặc điểm |
@@ -151,12 +151,22 @@ python main.py
 | **DFS** | Tìm kiếm theo chiều sâu | Tốn ít bộ nhớ, LIFO stack |
 | **UCS** | Tìm kiếm chi phí đồng nhất | Tối ưu theo cost, priority queue |
 
+#### **Chạy mô phỏng thuật toán**
+- **BFS**
+> ![BFS](images/BFS.gif)
+
+- **DFS**
+> ![DFS](images/DFS.gif)
+
+- **UCS**
+> ![UCS](images/UCS.gif)
+
 ---
 
 ### Nhóm 2 — Tìm kiếm có thông tin (Informed Search)
 
 <p align="center">
-  <img src="images/demo_informed.gif" alt="Informed Search" width="600"/>
+  <img src="images/informed.png" alt="Informed Search" width="600"/>
 </p>
 
 > **Heuristic**: Khoảng cách Manhattan `h(n) = |r - r_goal| + |c - c_goal|`
@@ -167,12 +177,22 @@ python main.py
 | **A\*** | `f(n) = g(n) + h(n)` | Tối ưu, admissible heuristic |
 | **IDA\*** | `f(n) ≤ threshold` tăng dần | Tiết kiệm bộ nhớ, tìm kiếm lặp sâu |
 
+#### **Chạy mô phỏng thuật toán**
+- **Greedy Search**
+> ![GS](images/GS.gif)
+
+- **A\***
+> ![Asao](images/Asao.gif)
+
+- **IDA\***
+> ![IDAsao](images/IDAsao.gif)
+
 ---
 
 ### Nhóm 3 — Tìm kiếm cục bộ (Local Search)
 
 <p align="center">
-  <img src="images/demo_local.gif" alt="Local Search" width="600"/>
+  <img src="images/local.png" alt="Local Search" width="600"/>
 </p>
 
 | Thuật toán | Chiến lược | Tham số |
@@ -181,12 +201,22 @@ python main.py
 | **Local Beam Search** | Duy trì k=2 trạng thái song song | beam width k=2 |
 | **Simulated Annealing** | Chấp nhận bước tệ với xác suất `e^(-Δ/T)`, hạ nhiệt dần | T₀=100, Tₘᵢₙ=1, α=0.95 |
 
+#### **Chạy mô phỏng thuật toán**
+- **Simple Hill Climbing**
+> ![SimpleHC](images/SimpleHC.gif)
+
+- **Local Beam Search**
+> ![LocalBeam](images/LocalBeam.gif)
+
+- **Simulated Annealing**
+> ![SimulatedAnnealing](images/SimulatedAnnealing.gif)
+
 ---
 
 ### Nhóm 4 — Tìm kiếm trong môi trường phức tạp (Complex Environment Search)
 
 <p align="center">
-  <img src="images/demo_complex.gif" alt="Complex Search" width="600"/>
+  <img src="images/complex.png" alt="Complex Search" width="600"/>
 </p>
 
 | Thuật toán | Mô hình | Mô tả |
@@ -195,12 +225,22 @@ python main.py
 | **Partial-Obs BFS** | Partially Observable | BFS có quan sát một phần môi trường |
 | **AND-OR Search** | Non-deterministic | Cây AND-OR với môi trường không tất định |
 
+#### **Chạy mô phỏng thuật toán**
+- **Sensorless BFS**
+> ![Sensorless](images/Sensorless.gif)
+
+- **Partial-Obs BFS**
+> ![PartialObs](images/PartialObs.gif)
+
+- **AND-OR Search**
+> ![AndOr](images/AndOr.gif)
+
 ---
 
 ### Nhóm 5 — Bài toán thỏa mãn ràng buộc (CSP)
 
 <p align="center">
-  <img src="images/demo_csp.gif" alt="CSP" width="600"/>
+  <img src="images/csp.png" alt="CSP" width="600"/>
 </p>
 
 Nhóm CSP **không tìm đường đi** mà **sinh bản đồ** thỏa mãn ràng buộc:
@@ -216,12 +256,22 @@ Nhóm CSP **không tìm đường đi** mà **sinh bản đồ** thỏa mãn rà
 | **AC-3** | Tiền xử lý arc-consistency → sau đó backtrack |
 | **Min-Conflicts** | Local search: gán ngẫu nhiên rồi sửa ô vi phạm ràng buộc nhiều nhất |
 
+#### **Chạy mô phỏng thuật toán**
+- **Forward Checking**
+> ![ForwardChecking](images/ForwardChecking.gif)
+
+- **AC-3**
+> ![AC3](images/AC3.gif)
+
+- **Min-Conflicts**
+> ![MinConflicts](images/MinConflicts.gif)
+
 ---
 
 ### Nhóm 6 — Tìm kiếm đối kháng (Adversarial Search)
 
 <p align="center">
-  <img src="images/demo_adversarial.gif" alt="Adversarial Search" width="600"/>
+  <img src="images/adversarial.png" alt="Adversarial Search" width="600"/>
 </p>
 
 Mô hình đối kháng trong Frozen Lake:
@@ -233,6 +283,16 @@ Mô hình đối kháng trong Frozen Lake:
 | **Minimax** | Santa tìm nước đi tốt nhất cho mình, Satan tìm nước đi tốt nhất để bắt Santa |
 | **Alpha-Beta** | Minimax có cắt tỉa nhánh — hiệu quả hơn |
 | **Expectimax** | Satan đi ngẫu nhiên — lấy trung bình các outcomes |
+
+#### **Chạy mô phỏng thuật toán**
+- **Minimax**
+> ![Minimax](images/Minimax.gif)
+
+- **Alpha-Beta**
+> ![AlphaBeta](images/AlphaBeta.gif)
+
+- **Expectimax**
+> ![Expectimax](images/Expectimax.gif)
 
 ---
 
@@ -295,7 +355,6 @@ ALGORITHMS = {
 | | Nguyễn Quốc Việt - 24110381|
 | **Trường** | ĐH Công nghệ Kỹ thuật TP.HCM (HCMUTE) |
 | **Môn học** | Trí Tuệ Nhân Tạo |
-| **GitHub** | [@quocviet171006-gif](https://github.com/quocviet171006-gif) |
 
 ---
 

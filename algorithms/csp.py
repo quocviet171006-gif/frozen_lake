@@ -318,6 +318,38 @@ class CSPGenerator:
                     continue
                 saved = {k: v[:] for k, v in doms.items()}   # save domains
 
+                # --- FORWARD CHECKING ---
+                domain_wipeout = False
+                
+                # 1. Ràng buộc lân cận (Hố không kề Nhà)
+                for nb in CSPGenerator._get_neighbors(cell):
+                    if nb not in assignment:
+                        if value == HOLE and SANTA_HOUSE in doms[nb]:
+                            doms[nb].remove(SANTA_HOUSE)
+                            if not doms[nb]: domain_wipeout = True
+                        elif value == SANTA_HOUSE and HOLE in doms[nb]:
+                            doms[nb].remove(HOLE)
+                            if not doms[nb]: domain_wipeout = True
+
+                # 2. Ràng buộc số lượng toàn cục (Hố, Núi)
+                h_count = sum(1 for v in assignment.values() if v == HOLE)
+                m_count = sum(1 for v in assignment.values() if v == MOUNT)
+                for u in variables:
+                    if u not in assignment:
+                        if h_count == MAX_HOLES and HOLE in doms[u]:
+                            doms[u].remove(HOLE)
+                            if not doms[u]: domain_wipeout = True
+                        if m_count == MAX_MOUNTS and MOUNT in doms[u]:
+                            doms[u].remove(MOUNT)
+                            if not doms[u]: domain_wipeout = True
+
+                if domain_wipeout:
+                    for k in saved:
+                        doms[k] = saved[k]
+                    del assignment[cell]
+                    continue
+                # ------------------------
+
                 yield from fc_backtrack(assignment, doms)
                 if CSPGenerator._assignment_complete(assignment):
                     return
