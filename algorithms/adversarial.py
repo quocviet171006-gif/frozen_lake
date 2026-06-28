@@ -37,7 +37,7 @@ class AdversarialSearch:
             dr, dc = ACT_DELTA[act]
             nr, nc = r + dr, c + dc
             if 0 <= nr < GameConfig.GRID and 0 <= nc < GameConfig.GRID:
-                if grid[nr][nc] not in (GameConfig.MOUNT, GameConfig.HOLE):
+                if grid[nr][nc] not in (GameConfig.MOUNT, GameConfig.HOLE, GameConfig.HOUSE):
                     moves.append((nr, nc))
         # If stuck, staying in place is the only valid move
         if not moves:
@@ -100,6 +100,9 @@ class AdversarialSearch:
         nodes_expanded = [0]
         bfs_dist = AdversarialSearch.get_bfs_distances(grid, goal_pos)
 
+        if santa_pos == goal_pos or santa_pos == satan_pos:
+            return santa_pos, 0
+
         def max_value(s_pos, m_pos, d):
             nodes_expanded[0] += 1
             if s_pos == goal_pos or s_pos == m_pos or d == 0: 
@@ -148,6 +151,9 @@ class AdversarialSearch:
     def alpha_beta(grid, santa_pos, goal_pos, satan_pos, is_santa_turn, visited_cells=None, depth=4):
         nodes_expanded = [0]
         bfs_dist = AdversarialSearch.get_bfs_distances(grid, goal_pos)
+
+        if santa_pos == goal_pos or santa_pos == satan_pos:
+            return santa_pos, 0
 
         def max_value(s_pos, m_pos, d, alpha, beta):
             nodes_expanded[0] += 1
@@ -208,6 +214,9 @@ class AdversarialSearch:
         nodes_expanded = [0]
         bfs_dist = AdversarialSearch.get_bfs_distances(grid, goal_pos)
 
+        if santa_pos == goal_pos or santa_pos == satan_pos:
+            return santa_pos, 0
+        
         def max_value(s_pos, m_pos, d):
             nodes_expanded[0] += 1
             if s_pos == goal_pos or s_pos == m_pos or d == 0: 

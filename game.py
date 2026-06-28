@@ -223,6 +223,7 @@ class FrozenLakeGame:
         satan_pos = random.choice(satan_cells) if satan_cells else None
 
         self.grid, self.santa_start, self.house_pos, self.satan_pos = grid, s_pos, h_pos, satan_pos
+        self.satan_start = satan_pos
         self.is_santa_turn = True
         return True
 
@@ -266,6 +267,7 @@ class FrozenLakeGame:
         """
         self.state = GameState.IDLE
         self.santa_pos = self.santa_start
+        self.satan_pos = getattr(self, 'satan_start', self.satan_pos)
         self.is_santa_turn = True
         self.full_path, self.visited_cells = [], []
         self.raw_path = []
