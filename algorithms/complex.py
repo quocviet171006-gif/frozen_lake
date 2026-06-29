@@ -281,15 +281,15 @@ class AndOrSearch:
             if state == goal_pos:
                 return {}
 
-            # Cycle detection
+            # Phát hiện chu trình (vòng lặp)
             if state in path:
                 return None
 
-            # Depth limit
+            # Giới hạn độ sâu
             if len(path) >= MAX_DEPTH:
                 return None
 
-            # Failure cache
+            # Bộ nhớ tạm (cache) cho các trạng thái thất bại
             if state in failed_states:
                 return None
 
@@ -336,8 +336,8 @@ class AndOrSearch:
             plans = {}   # empty mapping
             for s in states:
                 plan_s = or_search(s, path)
-                if plan_s is None:   # if plan_s == failure
-                    return None      # return failure
+                if plan_s is None:   # Nếu plan_s == thất bại
+                    return None      # Trả về thất bại
                 plans.update(plan_s)   # plans[s] = plan_s
             return plans
 

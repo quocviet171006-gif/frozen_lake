@@ -39,7 +39,7 @@ class AdversarialSearch:
             if 0 <= nr < GameConfig.GRID and 0 <= nc < GameConfig.GRID:
                 if grid[nr][nc] not in (GameConfig.MOUNT, GameConfig.HOLE):
                     moves.append((nr, nc))
-        # If stuck, staying in place is the only valid move
+        # Nếu bị kẹt, đứng yên là hành động duy nhất hợp lệ
         if not moves:
             moves.append(pos)
         return moves
@@ -97,6 +97,10 @@ class AdversarialSearch:
 
     @staticmethod
     def minimax(grid, santa_pos, goal_pos, satan_pos, is_santa_turn, visited_cells=None, depth=4):
+        """
+        Thuật toán Minimax: Đánh giá toàn bộ cây trò chơi tới độ sâu giới hạn.
+        Santa (MAX) cố gắng tối đa hóa điểm số, Satan (MIN) cố gắng tối thiểu hóa.
+        """
         nodes_expanded = [0]
         bfs_dist = AdversarialSearch.get_bfs_distances(grid, goal_pos)
 
@@ -104,6 +108,7 @@ class AdversarialSearch:
             return santa_pos, 0
 
         def max_value(s_pos, m_pos, d):
+            # Nút MAX (Santa): Chọn giá trị lớn nhất từ các nhánh con
             nodes_expanded[0] += 1
             if s_pos == goal_pos or s_pos == m_pos or d == 0: 
                 return AdversarialSearch.evaluate(s_pos, m_pos, goal_pos, d, bfs_dist, visited_cells)
@@ -114,6 +119,7 @@ class AdversarialSearch:
             return v
 
         def min_value(s_pos, m_pos, d):
+            # Nút MIN (Satan): Chọn giá trị nhỏ nhất từ các nhánh con
             nodes_expanded[0] += 1
             if s_pos == goal_pos or s_pos == m_pos or d == 0: 
                 return AdversarialSearch.evaluate(s_pos, m_pos, goal_pos, d, bfs_dist, visited_cells)
@@ -124,10 +130,11 @@ class AdversarialSearch:
             return v
 
         best_move = None
+        # Khởi tạo tìm kiếm tại nút gốc tùy thuộc vào lượt của ai
         if is_santa_turn:
             best_val = -math.inf
             moves = AdversarialSearch.get_valid_moves(grid, santa_pos)
-            random.shuffle(moves) # Random tie-breaking
+            random.shuffle(moves) # Phân giải ngẫu nhiên khi có nhiều nước đi bằng điểm
             for nxt in moves:
                 val = min_value(nxt, satan_pos, depth - 1)
                 if val > best_val:
@@ -149,6 +156,12 @@ class AdversarialSearch:
 
     @staticmethod
     def alpha_beta(grid, santa_pos, goal_pos, satan_pos, is_santa_turn, visited_cells=None, depth=4):
+        """
+        Cắt tỉa Alpha-Beta: Tối ưu hóa Minimax.
+        Cắt bỏ các nhánh chắc chắn không mang lại kết quả tốt hơn so với các lựa chọn đã biết.
+        - alpha: Giá trị tốt nhất đã biết cho MAX (Santa)
+        - beta: Giá trị tốt nhất đã biết cho MIN (Satan)
+        """
         nodes_expanded = [0]
         bfs_dist = AdversarialSearch.get_bfs_distances(grid, goal_pos)
 
@@ -156,6 +169,7 @@ class AdversarialSearch:
             return santa_pos, 0
 
         def max_value(s_pos, m_pos, d, alpha, beta):
+            # Nút MAX (Santa): Nếu giá trị vượt ngưỡng beta của MIN, nhánh này bị cắt tỉa (prune)
             nodes_expanded[0] += 1
             if s_pos == goal_pos or s_pos == m_pos or d == 0: 
                 return AdversarialSearch.evaluate(s_pos, m_pos, goal_pos, d, bfs_dist, visited_cells)
@@ -168,6 +182,7 @@ class AdversarialSearch:
             return v
 
         def min_value(s_pos, m_pos, d, alpha, beta):
+            # Nút MIN (Satan): Nếu giá trị rớt khỏi ngưỡng alpha của MAX, nhánh này bị cắt tỉa
             nodes_expanded[0] += 1
             if s_pos == goal_pos or s_pos == m_pos or d == 0: 
                 return AdversarialSearch.evaluate(s_pos, m_pos, goal_pos, d, bfs_dist, visited_cells)
@@ -211,6 +226,11 @@ class AdversarialSearch:
 
     @staticmethod
     def expectimax(grid, santa_pos, goal_pos, satan_pos, is_santa_turn, visited_cells=None, depth=4):
+        """
+        Thuật toán Expectimax: Xử lý môi trường có yếu tố ngẫu nhiên (chất lượng đối thủ không hoàn hảo).
+        Thay vì luôn chọn nước đi xấu nhất cho Santa ở nút MIN, Satan sẽ có xác suất đi lỗi,
+        do đó dùng Nút CHANCE tính điểm kỳ vọng.
+        """
         nodes_expanded = [0]
         bfs_dist = AdversarialSearch.get_bfs_distances(grid, goal_pos)
 
@@ -228,6 +248,7 @@ class AdversarialSearch:
             return v
 
         def chance_value(s_pos, m_pos, d):
+            # Nút CHANCE (Satan): Trả về giá trị trung bình kỳ vọng dựa trên phân phối xác suất
             nodes_expanded[0] += 1
             if s_pos == goal_pos or s_pos == m_pos or d == 0: 
                 return AdversarialSearch.evaluate(s_pos, m_pos, goal_pos, d, bfs_dist, visited_cells)
@@ -236,7 +257,7 @@ class AdversarialSearch:
             if not moves:
                 return max_value(s_pos, m_pos, d - 1)
 
-            # Satan evaluates his optimal move
+            # Satan đánh giá nước đi tối ưu của mình
             best_val_for_satan = math.inf
             best_moves_for_satan = []
             
@@ -252,6 +273,7 @@ class AdversarialSearch:
 
             optimal_move = random.choice(best_moves_for_satan) if best_moves_for_satan else moves[0]
             
+            # Tính điểm kỳ vọng: 70% xác suất tập trung vào nước đi tối ưu nhất, 30% dàn đều cho mọi nước đi
             N = len(moves)
             expected_val = 0
             for val, nxt in evals:
@@ -289,6 +311,7 @@ class AdversarialSearch:
                     elif val == best_val_for_satan:
                         best_moves_for_satan.append(nxt)
                 
+                # Áp dụng thực tế xác suất khi tới lượt Satan di chuyển: 70% tối ưu, 30% ngẫu nhiên toàn bộ
                 if random.random() < 0.7 and best_moves_for_satan:
                     best_move = random.choice(best_moves_for_satan)
                 else:

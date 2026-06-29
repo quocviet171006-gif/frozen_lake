@@ -72,7 +72,7 @@ class CSPGenerator:
 
     @staticmethod
     def _has_path(assignment):
-        """Return True if Santa can reach the house without crossing holes or mounts."""
+        """Trả về True nếu Santa có thể đi tới Nhà mà không đi qua núi hoặc hố."""
         santa_pos = next((c for c, v in assignment.items() if v == SANTA), None)
         house_pos = next((c for c, v in assignment.items() if v == SANTA_HOUSE), None)
         if santa_pos is None or house_pos is None:
@@ -106,13 +106,13 @@ class CSPGenerator:
 
     @staticmethod
     def _values_for_step(values, assigned_count):
-        """During obstacle placement, reserve Santa and House for the final step."""
+        """Trong khi đặt chướng ngại vật, giữ lại vị trí Santa và Nhà cho bước cuối cùng."""
         allowed = {FROZEN, HOLE, MOUNT}
         return [value for value in values if value in allowed]
 
     @staticmethod
     def _counts_feasible(assignment):
-        """Prune branches that can no longer reach exact tile counts."""
+        """Cắt tỉa các nhánh không còn khả năng đạt đủ số lượng ô yêu cầu."""
         total = GameConfig.GRID * GameConfig.GRID
         remaining_slots = total - len(assignment)
         obstacle_slots_left = max(0, remaining_slots - 2)
@@ -143,7 +143,7 @@ class CSPGenerator:
 
     @staticmethod
     def _finish_with_santa_house(assignment):
-        """Place Santa penultimately and House last on reachable snow cells."""
+        """Đặt Santa áp chót và Nhà ở bước cuối cùng trên các ô tuyết có thể đi tới."""
         base = dict(assignment)
         for r in range(GameConfig.GRID):
             for c in range(GameConfig.GRID):
@@ -287,7 +287,7 @@ class CSPGenerator:
         random.shuffle(variables)
 
         def fc_backtrack(assignment, doms):
-            yield dict(assignment)   # visualise step
+            yield dict(assignment)   # Trực quan hóa (visualise) từng bước
 
             if CSPGenerator._assignment_complete(assignment):
                 yield dict(assignment)
@@ -302,13 +302,13 @@ class CSPGenerator:
             if cell is None:
                 return
 
-            # ORDER-DOMAIN-VALUES (random order)
+            # Sắp xếp các giá trị miền (thứ tự ngẫu nhiên)
             vals = doms[cell][:]
             random.shuffle(vals)
             vals = CSPGenerator._values_for_step(vals, len(assignment))
 
             for value in vals:
-                # Consistent check
+                # Kiểm tra tính nhất quán
                 if not CSPGenerator._is_consistent(cell, value, assignment):
                     continue
 
@@ -316,7 +316,7 @@ class CSPGenerator:
                 if not CSPGenerator._counts_feasible(assignment):
                     del assignment[cell]
                     continue
-                saved = {k: v[:] for k, v in doms.items()}   # save domains
+                saved = {k: v[:] for k, v in doms.items()}   # Lưu lại miền giá trị hiện tại
 
                 # --- FORWARD CHECKING ---
                 domain_wipeout = False
@@ -354,7 +354,7 @@ class CSPGenerator:
                 if CSPGenerator._assignment_complete(assignment):
                     return
 
-                # Restore domains + remove assignment
+                # Khôi phục lại miền giá trị + xóa gán biến
                 for k in saved:
                     doms[k] = saved[k]
                 del assignment[cell]
@@ -426,7 +426,7 @@ class CSPGenerator:
                     for xk in CSPGenerator._get_neighbors(xi):
                         if xk != xj:
                             queue.append((xk, xi))
-                    # Nếu domain rỗng → CSP vô nghiệm (không xảy ra với map này)
+                    # Nếu domain rỗng -> CSP vô nghiệm (không xảy ra với map này)
                     if not domains[xi]:
                         return False
             return True
@@ -436,7 +436,7 @@ class CSPGenerator:
         if not ac3_ok:
             return
 
-        # Yield trạng thái sau AC-3 để visualise (hiện grid trống, domain đã thu gọn)
+        # Sinh trạng thái sau AC-3 để trực quan hóa (hiện grid trống, domain đã thu gọn)
         yield {}
 
         # ── Backtracking trên domains đã thu hẹp ─────────────────────────────
@@ -563,17 +563,17 @@ class CSPGenerator:
 
         # ── Khởi tạo ─────────────────────────────────────────────────────────
         current = make_initial()
-        yield dict(current)   # visualise initial state
+        yield dict(current)   # Trực quan hóa trạng thái khởi tạo
 
         # ── Vòng lặp chính Min-Conflicts ─────────────────────────────────────
         # for i = 1 to max_steps:
         for step in range(max_steps):
-            # if current is a solution for csp → return current
+            # Nếu trạng thái hiện tại là giải pháp -> trả về current
             if is_solution(current):
                 yield dict(current)
                 return
 
-            # var ← randomly chosen CONFLICTED variable
+            # Chọn ngẫu nhiên một biến đang vi phạm (CONFLICTED)
             conflicted = get_conflicted_cells(current)
             if not conflicted:
                 current = make_initial()
@@ -595,7 +595,7 @@ class CSPGenerator:
             yield dict(current)
             continue
 
-        # return failure (hết max_steps)
+        # Trả về thất bại (khi chạy hết max_steps)
         yield dict(current)
 
     # ── Alias giữ tương thích ngược ──────────────────────────────────────────

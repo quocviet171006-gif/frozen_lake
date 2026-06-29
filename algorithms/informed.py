@@ -17,33 +17,33 @@ class InformedSearch:
         """
         node = Node(start_state, cost=Environment.heuristic(start_state, goal_pos))
         frontier = [(node.cost, id(node), node)]
-        frontier_states = {start_state}              # Track states currently in FRONTIER
+        frontier_states = {start_state}              # Đánh dấu các trạng thái đang có trong FRONTIER
         
         reached = set()
         visit_order = []
         
         while frontier:
-            # Pop the state n from FRONTIER with the lowest h(n)
+            # Lấy trạng thái n từ FRONTIER có h(n) thấp nhất
             _, _, node = heapq.heappop(frontier)
             
-            # Skip stale entries
+            # Bỏ qua các mục cũ
             if node.state in reached:
                 frontier_states.discard(node.state)
                 continue
                 
-            # Goal check upon expansion
+            # Kiểm tra trạng thái đích khi mở rộng nút
             if node.state == goal_pos:
                 visit_order.append(node.state)
                 return reconstruct(node), visit_order
                 
-            # Remove n from FRONTIER and add to REACHED
+            # Xóa n khỏi FRONTIER và thêm vào REACHED
             frontier_states.discard(node.state)
             reached.add(node.state)
             visit_order.append(node.state)
             
-            # Expand neighbors
+            # Mở rộng các lân cận
             for n_state, _, action in Environment.get_cost_transitions(grid, node.state, goal_pos):
-                # If neighbor is neither in FRONTIER nor REACHED -> add to FRONTIER
+                # Nếu lân cận chưa có trong FRONTIER và chưa duyệt -> thêm vào FRONTIER
                 if n_state not in frontier_states and n_state not in reached:
                     child = Node(n_state, node, cost=Environment.heuristic(n_state, goal_pos), action=action)
                     heapq.heappush(frontier, (child.cost, id(child), child))
@@ -64,15 +64,15 @@ class InformedSearch:
         node.cost = node.g + node.h
         
         frontier = [(node.cost, id(node), node)]
-        frontier_dict = {start_state: node.g}        # State -> g(state) for states in FRONTIER
-        reached = {}                                 # State -> g(state) for expanded states
+        frontier_dict = {start_state: node.g}        # State -> g(state) cho các trạng thái trong FRONTIER
+        reached = {}                                 # State -> g(state) cho các trạng thái đã mở rộng
         visit_order = []
         
         while frontier:
-            # Pop node with lowest f(n)
+            # Lấy ra nút có f(n) thấp nhất
             _, _, node = heapq.heappop(frontier)
             
-            # Skip stale entries (already expanded with a better cost)
+            # Bỏ qua các mục cũ (đã được mở rộng với chi phí tốt hơn)
             if node.state in reached:
                 frontier_dict.pop(node.state, None)
                 continue
@@ -81,22 +81,22 @@ class InformedSearch:
                 visit_order.append(node.state)
                 return reconstruct(node), visit_order
                 
-            # Remove from FRONTIER and add to REACHED
+            # Xóa khỏi FRONTIER và thêm vào REACHED
             frontier_dict.pop(node.state, None)
             reached[node.state] = node.g
             visit_order.append(node.state)
             
-            # Expand neighbors
+            # Mở rộng lân cận
             for n_state, cost, action in Environment.get_cost_transitions(grid, node.state, goal_pos):
                 g_new = node.g + cost
                 h_val = Environment.heuristic(n_state, goal_pos)
                 
-                # Case 1: Neighbor already expanded (in REACHED)
+                # Trường hợp 1: Lân cận đã được mở rộng (có trong REACHED)
                 if n_state in reached:
                     if g_new >= reached[n_state]:
-                        continue # Found a worse path to an already expanded node
+                        continue # Đã có đường đi tốt hơn tới nút này
                     else:
-                        # Found a better path to an already expanded node -> Move back to FRONTIER
+                        # Tìm thấy đường đi tốt hơn tới nút đã mở rộng -> Đưa lại vào FRONTIER
                         del reached[n_state]
                         child = Node(n_state, node, action=action)
                         child.g = g_new
@@ -105,10 +105,10 @@ class InformedSearch:
                         frontier_dict[n_state] = g_new
                         heapq.heappush(frontier, (child.cost, id(child), child))
                         
-                # Case 2: Neighbor already in FRONTIER
+                # Trường hợp 2: Lân cận đã có trong FRONTIER
                 elif n_state in frontier_dict:
                     if g_new < frontier_dict[n_state]:
-                        # Found a better path -> Update g(n) and re-push
+                        # Tìm thấy đường đi tốt hơn -> Cập nhật g(n) và đẩy lại vào
                         frontier_dict[n_state] = g_new
                         child = Node(n_state, node, action=action)
                         child.g = g_new
@@ -116,7 +116,7 @@ class InformedSearch:
                         child.cost = child.g + child.h
                         heapq.heappush(frontier, (child.cost, id(child), child))
                         
-                # Case 3: Neighbor not seen before
+                # Trường hợp 3: Lân cận chưa từng được xét tới
                 else:
                     child = Node(n_state, node, action=action)
                     child.g = g_new
@@ -128,8 +128,12 @@ class InformedSearch:
         return [], visit_order
 
     @staticmethod
-    @staticmethod
     def ida_star(grid, start_state, goal_pos, *args):
+        """
+        Tìm kiếm sâu lặp sâu dần với A* (Iterative Deepening A* - IDA*)
+        Kết hợp ưu điểm bộ nhớ thấp của DFS và tính tối ưu của A*.
+        Sử dụng giới hạn f(n) tăng dần để cắt tỉa tìm kiếm.
+        """
         visit_order = []
         root = Node(start_state)
         root.g = 0
@@ -149,7 +153,7 @@ class InformedSearch:
                 visit_order.append(node.state)
 
                 for n_state, cost, action in Environment.get_cost_transitions(grid, node.state, goal_pos):
-                    if n_state in path_set:          # O(1) thay vì O(depth)
+                    if n_state in path_set:          # O(1) thay vì O(depth) kiểm tra chu trình
                         continue
 
                     child = Node(n_state, node, action=action)

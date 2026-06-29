@@ -19,12 +19,12 @@ class UninformedSearch:
         if start_state == goal_pos: 
             return [start_state], []
             
-        frontier = deque([node])                    # FIFO queue
-        reached = {start_state}                     # Track visited states
+        frontier = deque([node])                    # Hàng đợi FIFO
+        reached = {start_state}                     # Đánh dấu trạng thái đã duyệt
         visit_order = []
         
         while frontier:
-            node = frontier.popleft()               # Pop shallowest node
+            node = frontier.popleft()               # Lấy ra nút ở nông nhất
             visit_order.append(node.state)
             
             for nb_state, _, action in Environment.get_cost_transitions(grid, node.state, goal_pos):
@@ -52,12 +52,12 @@ class UninformedSearch:
         if start_state == goal_pos: 
             return [start_state], []
             
-        frontier = [node]                           # LIFO stack
+        frontier = [node]                           # Ngăn xếp LIFO
         reached = {start_state}
         visit_order = []
         
         while frontier:
-            node = frontier.pop()                   # Pop deepest node
+            node = frontier.pop()                   # Lấy ra nút ở sâu nhất
             visit_order.append(node.state)
             
             for nb_state, _, action in Environment.get_cost_transitions(grid, node.state, goal_pos):
@@ -70,7 +70,7 @@ class UninformedSearch:
                     
                 if s not in reached:
                     reached.add(s)
-                    frontier.append(child)          # Push to stack
+                    frontier.append(child)          # Đưa vào ngăn xếp
                     
         return [], visit_order
 
@@ -86,16 +86,16 @@ class UninformedSearch:
         import heapq
         node = Node(start_state, cost=0)
         
-        # Priority queue ordered by path cost: (cost, id, node)
+        # Hàng đợi ưu tiên theo chi phí đường đi: (cost, id, node)
         frontier = [(node.cost, id(node), node)]
         frontier_dict = {start_state: node.cost}         
         explored = set()                                 
         visit_order = []
         
         while frontier:
-            _, _, node = heapq.heappop(frontier)         # Pop lowest-cost node
+            _, _, node = heapq.heappop(frontier)         # Lấy ra nút có chi phí thấp nhất
             
-            # Skip stale entries (from replaced nodes in the priority queue)
+            # Bỏ qua các mục cũ (đã được thay thế trong hàng đợi ưu tiên)
             if node.state in explored:
                 continue
                 
@@ -110,12 +110,12 @@ class UninformedSearch:
             for n_state, cost, action in Environment.get_cost_transitions(grid, node.state, goal_pos):
                 child = Node(n_state, node, cost=node.cost + cost, action=action)
                 
-                # Case 1: State not explored and not in frontier -> Insert
+                # Trường hợp 1: Trạng thái chưa duyệt và chưa có trong frontier -> Thêm vào
                 if n_state not in explored and n_state not in frontier_dict:
                     frontier_dict[n_state] = child.cost
                     heapq.heappush(frontier, (child.cost, id(child), child))
                     
-                # Case 2: State in frontier but child has lower cost -> Replace
+                # Trường hợp 2: Có trong frontier nhưng nút con có chi phí thấp hơn -> Cập nhật
                 elif n_state in frontier_dict and child.cost < frontier_dict[n_state]:
                     frontier_dict[n_state] = child.cost  
                     heapq.heappush(frontier, (child.cost, id(child), child))
