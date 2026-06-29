@@ -660,11 +660,27 @@ class FrozenLakeGame:
 
     def _finish_game(self):
         self.state = GameState.DONE
-        self.log.append(
-            f"[HOME] Hoàn thành! Path:{self.stats['path_length']} | "
-            f"Nodes:{self.stats['nodes_expanded']} | "
-            f"Replans:{self.stats['replan_count']}"
-        )
+        
+        is_success = False
+        if self.group == 4 and self.alg_name != "AND-OR":
+            from algorithms.complex import SensorlessSearch
+            if self.current_santas and SensorlessSearch._is_goal(self.grid, frozenset(self.current_santas)):
+                is_success = True
+        elif self.santa_pos == self.house_pos:
+            is_success = True
+
+        if is_success:
+            self.log.append(
+                f"[HOME] Hoàn thành! Path:{self.stats['path_length']} | "
+                f"Nodes:{self.stats['nodes_expanded']} | "
+                f"Replans:{self.stats['replan_count']}"
+            )
+        else:
+            self.log.append(
+                f"[DEAD] Không tìm được giải pháp! Path:{self.stats['path_length']} | "
+                f"Nodes:{self.stats['nodes_expanded']} | "
+                f"Replans:{self.stats['replan_count']}"
+            )
 
     # -- Draw -----------------------------------------------------------------
     def draw(self):

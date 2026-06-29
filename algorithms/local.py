@@ -31,15 +31,15 @@ class LocalSearch:
             for n_state, _, action in nbs:
                 next_cost = Environment.heuristic(n_state, goal_pos)
                 
-                # If neighbor is strictly better (lower heuristic cost)
+                # Nếu lân cận tốt hơn thực sự (chi phí heuristic thấp hơn)
                 if next_cost < current.cost:  
                     current = Node(n_state, current, cost=next_cost, action=action)
                     visit_order.append(current.state)
                     found_better = True
-                    break # Simple HC: take the first better neighbor found
+                    break # Simple HC: lấy lân cận đầu tiên tốt hơn tìm được
                     
             if not found_better:
-                # Local maximum reached
+                # Đã đạt cực đại cục bộ
                 break
                 
         return reconstruct(current), visit_order
@@ -67,7 +67,7 @@ class LocalSearch:
             child = Node(n_state, initial_node, cost=Environment.heuristic(n_state, goal_pos), action=action)
             initial_children.append(child)
             
-        # Select best k initial states
+        # Chọn k trạng thái khởi tạo tốt nhất
         initial_children.sort(key=lambda x: x.cost)
         current_state_set = initial_children[:k]
         
@@ -78,7 +78,7 @@ class LocalSearch:
         while current_state_set:
             neighbor_states = []
             
-            # Generate all neighbors for all k current states
+            # Tạo tất cả lân cận cho toàn bộ k trạng thái hiện tại
             for node in current_state_set:
                 for n_state, _, action in Environment.get_cost_transitions(grid, node.state, goal_pos):
                     child = Node(n_state, node, cost=Environment.heuristic(n_state, goal_pos), action=action)
@@ -87,13 +87,13 @@ class LocalSearch:
             if not neighbor_states:
                 break
                 
-            # Goal Check
+            # Kiểm tra đích đến
             for neighbor in neighbor_states:
                 if neighbor.state == goal_pos:
                     visit_order.append(neighbor.state)
                     return reconstruct(neighbor), visit_order
                     
-            # Select the k best states from all generated neighbors
+            # Chọn k trạng thái tốt nhất từ tất cả các lân cận được tạo ra
             neighbor_states.sort(key=lambda x: x.cost)
             current_state_set = neighbor_states[:k]
             
@@ -113,7 +113,7 @@ class LocalSearch:
         current = start_state
         current_h = Environment.heuristic(start_state, goal_pos)
         
-        # Annealing parameters
+        # Các tham số cho tôi luyện
         T = 100.0       # Initial temperature
         Tmin = 1.0      # Minimum temperature to stop
         alpha = 0.95    # Cooling rate
@@ -129,20 +129,20 @@ class LocalSearch:
             if not nbs:
                 break
                 
-            # Randomly pick a neighbor
+            # Chọn ngẫu nhiên một lân cận
             n_state, _, action = random.choice(nbs)
             
             next_h = Environment.heuristic(n_state, goal_pos)
             delta = next_h - current_h # Negative means the next state is better (lower cost)
             
-            # If the neighbor is better, always accept it
+            # Nếu lân cận tốt hơn, luôn chấp nhận nó
             if delta < 0:
                 current = n_state
                 current_h = next_h
                 current_node = Node(n_state, current_node, action=action)
                 visit_order.append(current)
             else:
-                # If worse, accept with a probability that decreases over time
+                # Nếu tệ hơn, chấp nhận với xác suất giảm dần theo thời gian
                 p = math.exp(-delta / T) if T > 0 else 0
                 if random.random() < p:
                     current = n_state
@@ -150,7 +150,7 @@ class LocalSearch:
                     current_node = Node(n_state, current_node, action=action)
                     visit_order.append(current)
                     
-            # Cool down
+            # Làm mát (giảm nhiệt độ)
             T *= alpha
             
         return reconstruct(current_node), visit_order
